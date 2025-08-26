@@ -710,19 +710,28 @@ if st.checkbox("🔧 Developer Debug Panel"):
 try:
     import pandas as pd
 except ImportError:
-    pass border-radius: 10px; min-width: 200px;">
+    pd = None
+
+# Lalu untuk HTML, gunakan Streamlit markdown:
+if st.sidebar.button("Show Features"):
+    st.markdown("""
+    <div style="display: flex; flex-wrap: wrap; justify-content: center;">
+        <div style="margin: 10px; padding: 15px; background: rgba(255, 215, 0, 0.1); 
+             border-radius: 10px; min-width: 200px;">
             <h4>🤖 AI Detection</h4>
             <p>YOLOv5 Neural Network<br>Real-time object detection<br>25% confidence threshold</p>
         </div>
         
-        <div style="margin: 10px; padding: 15px; background: rgba(255, 215, 0, 0.1); border-radius: 10px; min-width: 200px;">
+        <div style="margin: 10px; padding: 15px; background: rgba(255, 215, 0, 0.1); 
+             border-radius: 10px; min-width: 200px;">
             <h4>🌌 Sky Quality</h4>
             <p>SQM Integration<br>Light pollution analysis<br>Visibility prediction</p>
         </div>
         
-        <div style="margin: 10px; padding: 15px; background: rgba(255, 215, 0, 0.1); border-radius: 10px; min-width: 200px;">
+        <div style="margin: 10px; padding: 15px; background: rgba(255, 215, 0, 0.1); 
+             border-radius: 10px; min-width: 200px;">
             <h4>🌍 Location Services</h4>
             <p>City presets available<br>Manual coordinates<br>Weather integration</p>
         </div>
-        
-        <div style="margin: 10px; padding: 15px; background: rgba(255, 215, 0, 0.1);
+    </div>
+    """, unsafe_allow_html=True)
