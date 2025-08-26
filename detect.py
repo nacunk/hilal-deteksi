@@ -1,6 +1,7 @@
 import torch
-import cv2
 import os
+os.environ["OPENCV_VIDEOIO_PRIORITY_MSMF"] = "0"  # khusus video capture di headless
+import cv2
 from pathlib import Path
 from yolov5.models.common import DetectMultiBackend
 from yolov5.utils.general import non_max_suppression, scale_coords
