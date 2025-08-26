@@ -6,3 +6,4 @@ requests
 pandas
 matplotlib
 imageio[ffmpeg]
+git+https://github.com/ultralytics/yolov5.git
