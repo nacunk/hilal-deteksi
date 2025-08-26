@@ -1,24 +1,17 @@
 import requests
 
-def get_weather(city_name=None, lat=None, lon=None):
+def get_weather(lat, lon):
     """
-    Ambil data cuaca BMKG
-    city_name : string, nama kota
-    lat, lon  : float, koordinat
+    Ambil data cuaca dari BMKG (mock API)
     """
     try:
-        if city_name:
-            url = f"https://api.bmkg.go.id/cuaca?city={city_name}"
-        elif lat is not None and lon is not None:
-            url = f"https://api.bmkg.go.id/cuaca?lat={lat}&lon={lon}"
-        else:
-            return None
-
-        res = requests.get(url).json()
+        # Ganti endpoint sesuai API BMKG yang valid
+        url = f"https://api.bmkg.go.id/cuaca?lat={lat}&lon={lon}"
+        res = requests.get(url, timeout=5).json()
         return {
-            "suhu": res.get("temperature", "N/A"),
-            "kelembapan": res.get("humidity", "N/A"),
-            "cuaca": res.get("weather", "N/A")
+            "suhu": res.get('temperature', 'N/A'),
+            "kelembapan": res.get('humidity', 'N/A'),
+            "cuaca": res.get('weather', 'N/A')
         }
     except:
-        return {"suhu":"N/A","kelembapan":"N/A","cuaca":"N/A"}
+        return {"suhu": "N/A", "kelembapan": "N/A", "cuaca": "N/A"}
