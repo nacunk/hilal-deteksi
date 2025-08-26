@@ -1,447 +1,200 @@
 import requests
-import json
-from datetime import datetime
-import math
+
+# Database kota-kota besar di Indonesia dengan koordinatnya
+INDONESIAN_CITIES = {
+    "Jakarta": {"lat": -6.2088, "lon": 106.8456},
+    "Surabaya": {"lat": -7.2575, "lon": 112.7521},
+    "Bandung": {"lat": -6.9175, "lon": 107.6191},
+    "Medan": {"lat": 3.5952, "lon": 98.6722},
+    "Semarang": {"lat": -6.9667, "lon": 110.4167},
+    "Makassar": {"lat": -5.1477, "lon": 119.4327},
+    "Palembang": {"lat": -2.9761, "lon": 104.7754},
+    "Tangerang": {"lat": -6.1783, "lon": 106.6319},
+    "Depok": {"lat": -6.4025, "lon": 106.7942},
+    "Bekasi": {"lat": -6.2383, "lon": 106.9756},
+    "Bogor": {"lat": -6.5971, "lon": 106.8060},
+    "Yogyakarta": {"lat": -7.7956, "lon": 110.3695},
+    "Malang": {"lat": -7.9797, "lon": 112.6304},
+    "Solo": {"lat": -7.5601, "lon": 110.8316},
+    "Denpasar": {"lat": -8.6705, "lon": 115.2126},
+    "Balikpapan": {"lat": -1.2379, "lon": 116.8529},
+    "Banjarmasin": {"lat": -3.3194, "lon": 114.5906},
+    "Samarinda": {"lat": -0.5017, "lon": 117.1536},
+    "Batam": {"lat": 1.1307, "lon": 104.0530},
+    "Pekanbaru": {"lat": 0.5071, "lon": 101.4478},
+    "Jambi": {"lat": -1.6101, "lon": 103.6131},
+    "Bengkulu": {"lat": -3.7928, "lon": 102.2608},
+    "Lampung": {"lat": -5.4292, "lon": 105.2619},
+    "Serang": {"lat": -6.1169, "lon": 106.1539},
+    "Cirebon": {"lat": -6.7063, "lon": 108.5579},
+    "Tasikmalaya": {"lat": -7.3506, "lon": 108.2281},
+    "Purwokerto": {"lat": -7.4197, "lon": 109.2342},
+    "Tegal": {"lat": -6.8694, "lon": 109.1402},
+    "Pekalongan": {"lat": -6.8883, "lon": 109.6753},
+    "Kudus": {"lat": -6.8048, "lon": 110.8405},
+    "Magelang": {"lat": -7.4797, "lon": 110.2175},
+    "Klaten": {"lat": -7.7058, "lon": 110.6061},
+    "Pontianak": {"lat": -0.0263, "lon": 109.3425},
+    "Kupang": {"lat": -10.1718, "lon": 123.6044},
+    "Mataram": {"lat": -8.5833, "lon": 116.1167},
+    "Manado": {"lat": 1.4748, "lon": 124.8421},
+    "Palu": {"lat": -0.8917, "lon": 119.8707},
+    "Kendari": {"lat": -3.9450, "lon": 122.4989},
+    "Ambon": {"lat": -3.6954, "lon": 128.1814},
+    "Jayapura": {"lat": -2.5167, "lon": 140.7167},
+    "Sorong": {"lat": -0.8833, "lon": 131.2500},
+    "Ternate": {"lat": 0.7833, "lon": 127.3667},
+    "Banda Aceh": {"lat": 5.5483, "lon": 95.3238},
+    "Padang": {"lat": -0.9471, "lon": 100.4172},
+    "Bukittinggi": {"lat": -0.3073, "lon": 100.3706},
+    "Batam": {"lat": 1.1307, "lon": 104.0530},
+    "Tanjung Pinang": {"lat": 0.9186, "lon": 104.4489}
+}
 
 def get_weather(lat, lon):
     """
-    Ambil data cuaca dari berbagai sumber API dengan fallback
+    Ambil data cuaca dari OpenWeatherMap API (gratis)
     """
     try:
-        # Convert to float
-        lat_f = float(lat)
-        lon_f = float(lon)
+        # Menggunakan OpenWeatherMap API (gratis dengan registrasi)
+        # Ganti YOUR_API_KEY dengan API key dari openweathermap.org
+        api_key = "demo_key"  # Perlu diganti dengan API key yang valid
         
-        # Try OpenWeatherMap API first (you need to replace with your API key)
-        # For demo purposes, we'll use a mock response based on location
+        # URL untuk current weather
+        url = f"https://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&appid={api_key}&units=metric&lang=id"
         
-        # Attempt 1: Try OpenWeatherMap (requires API key)
-        try:
-            # Replace 'YOUR_API_KEY' with actual API key
-            # api_key = "YOUR_API_KEY"
-            # owm_url = f"http://api.openweathermap.org/data/2.5/weather?lat={lat_f}&lon={lon_f}&appid={api_key}&units=metric"
-            # response = requests.get(owm_url, timeout=5)
-            # if response.status_code == 200:
-            #     data = response.json()
-            #     return parse_openweather_data(data)
-            pass
-        except:
-            pass
-        
-        # Attempt 2: Try alternative weather service
-        try:
-            # Using wttr.in service as fallback
-            wttr_url = f"https://wttr.in/{lat_f},{lon_f}?format=j1"
-            response = requests.get(wttr_url, timeout=10)
-            if response.status_code == 200:
-                data = response.json()
-                return parse_wttr_data(data)
-        except Exception as e:
-            print(f"wttr.in failed: {e}")
-        
-        # Attempt 3: Use geographical estimation
-        return get_weather_estimation(lat_f, lon_f)
-        
-    except Exception as e:
-        print(f"Weather API error: {e}")
-        return get_default_weather()
-
-def parse_wttr_data(data):
-    """
-    Parse data dari wttr.in API
-    """
-    try:
-        current = data['current_condition'][0]
-        return {
-            'suhu': current['temp_C'],
-            'kelembapan': current['humidity'],
-            'cuaca': current['weatherDesc'][0]['value'],
-            'tekanan': current.get('pressure', 'N/A'),
-            'angin_kecepatan': current.get('windspeedKmph', 'N/A'),
-            'angin_arah': current.get('winddir16Point', 'N/A'),
-            'visibility': current.get('visibility', 'N/A'),
-            'uv_index': current.get('uvIndex', 'N/A'),
-            'feels_like': current.get('FeelsLikeC', 'N/A')
-        }
-    except:
-        return get_default_weather()
-
-def parse_openweather_data(data):
-    """
-    Parse data dari OpenWeatherMap API
-    """
-    try:
-        return {
-            'suhu': data['main']['temp'],
-            'kelembapan': data['main']['humidity'],
-            'cuaca': data['weather'][0]['description'].title(),
-            'tekanan': data['main']['pressure'],
-            'angin_kecepatan': data['wind'].get('speed', 'N/A'),
-            'angin_arah': data['wind'].get('deg', 'N/A'),
-            'visibility': data.get('visibility', 'N/A'),
-            'feels_like': data['main'].get('feels_like', 'N/A')
-        }
-    except:
-        return get_default_weather()
-
-def get_weather_estimation(lat, lon):
-    """
-    Estimasi cuaca berdasarkan lokasi geografis dan waktu
-    Ini adalah fallback ketika API tidak tersedia
-    """
-    try:
-        # Basic estimation based on location and season
-        current_month = datetime.now().month
-        
-        # Indonesia generally has tropical climate
-        if -11 <= lat <= 6 and 95 <= lon <= 141:  # Indonesia bounds
-            # Wet season (Oct-Mar) vs Dry season (Apr-Sep)
-            if current_month in [10, 11, 12, 1, 2, 3]:
-                # Wet season
-                estimated_temp = 26 + (lat * -0.5)  # Cooler at higher latitudes
-                estimated_humidity = 80 + (current_month % 3) * 5
-                weather_desc = "Cloudy with possible rain"
-            else:
-                # Dry season
-                estimated_temp = 29 + (lat * -0.5)
-                estimated_humidity = 65 + (current_month % 3) * 5
-                weather_desc = "Partly cloudy"
+        # Jika API key tidak tersedia, gunakan data mock
+        if api_key == "demo_key":
+            return get_mock_weather(lat, lon)
             
-            return {
-                'suhu': round(estimated_temp, 1),
-                'kelembapan': min(estimated_humidity, 95),
-                'cuaca': weather_desc,
-                'tekanan': '1013',
-                'angin_kecepatan': '10-15',
-                'angin_arah': 'SW',
-                'visibility': '10',
-                'status': 'Estimated'
-            }
+        response = requests.get(url, timeout=5)
         
-        # For locations outside Indonesia
+        if response.status_code == 200:
+            data = response.json()
+            return {
+                "suhu": round(data['main']['temp'], 1),
+                "kelembapan": data['main']['humidity'],
+                "cuaca": data['weather'][0]['description'].title(),
+                "tekanan": data['main']['pressure'],
+                "kecepatan_angin": data.get('wind', {}).get('speed', 0),
+                "visibilitas": data.get('visibility', 10000) / 1000  # dalam km
+            }
         else:
-            return {
-                'suhu': '25',
-                'kelembapan': '70',
-                'cuaca': 'Data not available for this location',
-                'tekanan': '1013',
-                'angin_kecepatan': 'N/A',
-                'angin_arah': 'N/A',
-                'visibility': 'N/A',
-                'status': 'Location outside coverage'
-            }
+            return get_mock_weather(lat, lon)
             
-    except:
-        return get_default_weather()
+    except Exception as e:
+        print(f"Error fetching weather: {e}")
+        return get_mock_weather(lat, lon)
 
-def get_default_weather():
+def get_mock_weather(lat, lon):
     """
-    Return default weather data when all APIs fail
+    Berikan data cuaca simulasi berdasarkan koordinat
     """
-    return {
-        'suhu': 'N/A',
-        'kelembapan': 'N/A', 
-        'cuaca': 'Data tidak tersedia',
-        'tekanan': 'N/A',
-        'angin_kecepatan': 'N/A',
-        'angin_arah': 'N/A',
-        'visibility': 'N/A',
-        'status': 'API Unavailable'
-    }
-
-def calculate_moon_phase(date=None):
-    """
-    Hitung fase bulan untuk tanggal tertentu
-    Returns: fase bulan dalam derajat (0-360)
-    """
-    if date is None:
-        date = datetime.now()
+    import random
+    import math
     
-    # Simplified moon phase calculation
-    # Based on synodic month cycle (29.53 days)
+    # Simulasi cuaca berdasarkan lokasi geografis
+    # Suhu berdasarkan lintang (latitude)
+    base_temp = 28 - (abs(lat) * 0.6)  # Semakin jauh dari khatulistiwa, semakin dingin
+    temp_variation = random.uniform(-3, 3)
+    temperature = round(base_temp + temp_variation, 1)
     
-    # Known new moon date (reference point)
-    known_new_moon = datetime(2000, 1, 6, 18, 14)  # New moon on Jan 6, 2000
+    # Kelembapan berdasarkan kedekatan dengan laut (simulasi)
+    base_humidity = 75
+    humidity_variation = random.uniform(-15, 15)
+    humidity = max(40, min(95, int(base_humidity + humidity_variation)))
     
-    # Calculate days since reference
-    days_since = (date - known_new_moon).total_seconds() / (24 * 3600)
+    # Kondisi cuaca random tapi realistis
+    weather_conditions = [
+        "Cerah", "Berawan Sebagian", "Berawan", 
+        "Mendung", "Hujan Ringan", "Kabut"
+    ]
     
-    # Moon cycle length
-    synodic_month = 29.530588861
-    
-    # Calculate current position in cycle
-    cycle_position = (days_since % synodic_month) / synodic_month
-    
-    # Convert to degrees (0 = new moon, 180 = full moon)
-    moon_phase_deg = cycle_position * 360
-    
-    return {
-        'phase_degrees': round(moon_phase_deg, 1),
-        'phase_name': get_moon_phase_name(moon_phase_deg),
-        'illumination': round(50 * (1 - math.cos(math.radians(moon_phase_deg))), 1),
-        'days_in_cycle': round(cycle_position * synodic_month, 1)
-    }
-
-def get_moon_phase_name(degrees):
-    """
-    Convert moon phase degrees to readable name
-    """
-    if degrees < 7 or degrees > 353:
-        return "🌑 New Moon"
-    elif degrees < 90:
-        return "🌒 Waxing Crescent"
-    elif degrees < 97:
-        return "🌓 First Quarter"
-    elif degrees < 173:
-        return "🌔 Waxing Gibbous"
-    elif degrees < 187:
-        return "🌕 Full Moon"
-    elif degrees < 263:
-        return "🌖 Waning Gibbous"
-    elif degrees < 277:
-        return "🌗 Last Quarter"
+    # Probabilitas cuaca berdasarkan kelembapan
+    if humidity > 85:
+        weather_weights = [0.1, 0.2, 0.3, 0.2, 0.15, 0.05]
+    elif humidity > 70:
+        weather_weights = [0.3, 0.3, 0.2, 0.1, 0.05, 0.05]
     else:
-        return "🌘 Waning Crescent"
-
-def calculate_sun_position(lat, lon, date=None):
-    """
-    Hitung posisi matahari (elevation dan azimuth) untuk lokasi dan waktu tertentu
-    Simplified calculation for sunset/sunrise times
-    """
-    if date is None:
-        date = datetime.now()
+        weather_weights = [0.5, 0.3, 0.15, 0.03, 0.01, 0.01]
     
-    try:
-        # Convert to radians
-        lat_rad = math.radians(lat)
-        
-        # Day of year
-        day_of_year = date.timetuple().tm_yday
-        
-        # Solar declination angle
-        declination = math.radians(23.45) * math.sin(math.radians(360 * (284 + day_of_year) / 365))
-        
-        # Hour angle for sunrise/sunset (when elevation = 0)
-        cos_hour_angle = -math.tan(lat_rad) * math.tan(declination)
-        
-        # Check if sun rises/sets at this latitude
-        if cos_hour_angle < -1:
-            return {"status": "Polar day", "sunrise": "No sunset", "sunset": "No sunset"}
-        elif cos_hour_angle > 1:
-            return {"status": "Polar night", "sunrise": "No sunrise", "sunset": "No sunrise"}
-        
-        # Hour angle
-        hour_angle = math.acos(cos_hour_angle)
-        
-        # Convert to hours
-        hour_angle_hours = math.degrees(hour_angle) / 15
-        
-        # Calculate sunrise and sunset times (local solar time)
-        sunrise_lst = 12 - hour_angle_hours
-        sunset_lst = 12 + hour_angle_hours
-        
-        # Convert to local time (simplified - doesn't account for timezone/DST)
-        # Longitude correction: 4 minutes per degree
-        time_correction = lon / 15  # hours
-        
-        sunrise_local = sunrise_lst + time_correction
-        sunset_local = sunset_lst + time_correction
-        
-        # Format times
-        def format_time(hours):
-            h = int(hours) % 24
-            m = int((hours % 1) * 60)
-            return f"{h:02d}:{m:02d}"
-        
-        return {
-            "status": "Normal",
-            "sunrise": format_time(sunrise_local),
-            "sunset": format_time(sunset_local),
-            "daylight_hours": round(sunset_local - sunrise_local, 1)
-        }
-        
-    except Exception as e:
-        return {"status": "Error", "error": str(e)}
-
-def get_islamic_calendar_info():
-    """
-    Informasi kalender Islam sederhana
-    """
-    # This is a simplified version - in reality you'd need accurate Islamic calendar calculations
-    current_date = datetime.now()
-    
-    # Estimated Hijri year (very rough approximation)
-    hijri_year_approx = 1445 + ((current_date.year - 2024) * 354.37 / 365.25)
-    
-    islamic_months = [
-        "Muharram", "Safar", "Rabi' al-Awwal", "Rabi' al-Thani",
-        "Jumada al-Awwal", "Jumada al-Thani", "Rajab", "Sha'ban",
-        "Ramadan", "Shawwal", "Dhu al-Qi'dah", "Dhu al-Hijjah"
-    ]
-    
-    # Simplified month estimation
-    estimated_month_index = (current_date.month - 1 + current_date.day // 15) % 12
+    weather = random.choices(weather_conditions, weights=weather_weights)[0]
     
     return {
-        "estimated_hijri_year": int(hijri_year_approx),
-        "estimated_month": islamic_months[estimated_month_index],
-        "note": "Perkiraan kasar - gunakan perhitungan hisab yang akurat untuk keperluan resmi"
+        "suhu": temperature,
+        "kelembapan": humidity,
+        "cuaca": weather,
+        "tekanan": random.randint(1008, 1025),
+        "kecepatan_angin": round(random.uniform(0.5, 8.0), 1),
+        "visibilitas": round(random.uniform(8, 15), 1)
     }
 
-def validate_coordinates(lat, lon):
+def get_city_coordinates(city_name):
     """
-    Validasi koordinat latitude dan longitude
+    Ambil koordinat dari nama kota
     """
-    try:
-        lat_f = float(lat)
-        lon_f = float(lon)
-        
-        if not (-90 <= lat_f <= 90):
-            return {"valid": False, "error": "Latitude harus antara -90 dan 90"}
-        
-        if not (-180 <= lon_f <= 180):
-            return {"valid": False, "error": "Longitude harus antara -180 dan 180"}
-        
-        return {
-            "valid": True,
-            "latitude": lat_f,
-            "longitude": lon_f,
-            "location_type": get_location_type(lat_f, lon_f)
-        }
-        
-    except ValueError:
-        return {"valid": False, "error": "Format koordinat tidak valid"}
+    return INDONESIAN_CITIES.get(city_name, None)
 
-def get_location_type(lat, lon):
+def calculate_moon_visibility_score(sqm, weather_data):
     """
-    Tentukan jenis lokasi berdasarkan koordinat
+    Hitung skor visibilitas bulan berdasarkan SQM dan cuaca
     """
-    # Indonesia bounds check
-    if -11 <= lat <= 6 and 95 <= lon <= 141:
-        return "Indonesia"
-    
-    # Other regions
-    elif 20 <= lat <= 50 and -10 <= lon <= 40:
-        return "Middle East/Mediterranean"
-    elif -40 <= lat <= 40 and -180 <= lon <= 180:
-        return "Tropical/Subtropical"
+    # Skor berdasarkan SQM (0-10)
+    if sqm >= 22:
+        sqm_score = 10
+    elif sqm >= 21:
+        sqm_score = 8
+    elif sqm >= 20:
+        sqm_score = 6
+    elif sqm >= 19:
+        sqm_score = 4
     else:
-        return "Other Region"
+        sqm_score = 2
+    
+    # Skor berdasarkan cuaca (0-10)
+    weather_condition = weather_data.get('cuaca', '').lower()
+    if 'cerah' in weather_condition:
+        weather_score = 10
+    elif 'berawan sebagian' in weather_condition:
+        weather_score = 7
+    elif 'berawan' in weather_condition:
+        weather_score = 5
+    elif 'mendung' in weather_condition:
+        weather_score = 3
+    else:
+        weather_score = 1
+    
+    # Skor berdasarkan kelembapan (0-10)
+    humidity = weather_data.get('kelembapan', 50)
+    if humidity < 60:
+        humidity_score = 10
+    elif humidity < 75:
+        humidity_score = 7
+    elif humidity < 85:
+        humidity_score = 4
+    else:
+        humidity_score = 1
+    
+    # Total skor (rata-rata tertimbang)
+    total_score = (sqm_score * 0.5 + weather_score * 0.3 + humidity_score * 0.2)
+    
+    return {
+        'total_score': round(total_score, 1),
+        'sqm_score': sqm_score,
+        'weather_score': weather_score,
+        'humidity_score': humidity_score,
+        'recommendation': get_observation_recommendation(total_score)
+    }
 
-def calculate_qibla_direction(lat, lon):
+def get_observation_recommendation(score):
     """
-    Hitung arah kiblat dari koordinat yang diberikan
-    Arah ke Makkah (21.4225°N, 39.8262°E)
+    Berikan rekomendasi observasi berdasarkan skor
     """
-    try:
-        # Koordinat Makkah
-        makkah_lat = math.radians(21.4225)
-        makkah_lon = math.radians(39.8262)
-        
-        # Koordinat lokasi
-        loc_lat = math.radians(float(lat))
-        loc_lon = math.radians(float(lon))
-        
-        # Perbedaan longitude
-        delta_lon = makkah_lon - loc_lon
-        
-        # Hitung bearing menggunakan formula great circle
-        y = math.sin(delta_lon) * math.cos(makkah_lat)
-        x = (math.cos(loc_lat) * math.sin(makkah_lat) - 
-             math.sin(loc_lat) * math.cos(makkah_lat) * math.cos(delta_lon))
-        
-        # Bearing dalam radian
-        bearing_rad = math.atan2(y, x)
-        
-        # Convert ke derajat dan normalisasi ke 0-360
-        bearing_deg = (math.degrees(bearing_rad) + 360) % 360
-        
-        return {
-            "qibla_direction": round(bearing_deg, 1),
-            "cardinal_direction": get_cardinal_direction(bearing_deg),
-            "distance_km": calculate_distance(float(lat), float(lon), 21.4225, 39.8262)
-        }
-        
-    except Exception as e:
-        return {"error": f"Error calculating qibla: {e}"}
-
-def get_cardinal_direction(degrees):
-    """
-    Convert degrees to cardinal direction
-    """
-    directions = [
-        "N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE",
-        "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"
-    ]
-    
-    index = round(degrees / 22.5) % 16
-    return directions[index]
-
-def calculate_distance(lat1, lon1, lat2, lon2):
-    """
-    Hitung jarak antara dua koordinat menggunakan formula Haversine
-    """
-    # Convert to radians
-    lat1, lon1, lat2, lon2 = map(math.radians, [lat1, lon1, lat2, lon2])
-    
-    # Haversine formula
-    dlat = lat2 - lat1
-    dlon = lon2 - lon1
-    a = math.sin(dlat/2)**2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon/2)**2
-    c = 2 * math.asin(math.sqrt(a))
-    
-    # Earth radius in kilometers
-    r = 6371
-    
-    return round(c * r, 1)
-
-def get_astronomical_data(lat, lon, date=None):
-    """
-    Dapatkan data astronomis lengkap untuk lokasi dan waktu tertentu
-    """
-    if date is None:
-        date = datetime.now()
-    
-    try:
-        lat_f = float(lat)
-        lon_f = float(lon)
-        
-        return {
-            "moon_phase": calculate_moon_phase(date),
-            "sun_position": calculate_sun_position(lat_f, lon_f, date),
-            "qibla": calculate_qibla_direction(lat_f, lon_f),
-            "islamic_calendar": get_islamic_calendar_info(),
-            "location_info": {
-                "latitude": lat_f,
-                "longitude": lon_f,
-                "location_type": get_location_type(lat_f, lon_f)
-            },
-            "observation_time": date.strftime("%Y-%m-%d %H:%M:%S")
-        }
-        
-    except Exception as e:
-        return {"error": f"Error calculating astronomical data: {e}"}
-
-# Test function untuk debugging
-def test_weather_api():
-    """
-    Test function untuk memastikan API cuaca berfungsi
-    """
-    test_locations = [
-        ("-6.175", "106.827", "Jakarta"),
-        ("-7.257", "112.752", "Surabaya"),
-        ("3.595", "98.672", "Medan")
-    ]
-    
-    print("Testing Weather API...")
-    for lat, lon, city in test_locations:
-        print(f"\nTesting {city} ({lat}, {lon}):")
-        result = get_weather(lat, lon)
-        print(f"Result: {result}")
-    
-    print("\nTesting Astronomical Data...")
-    astro_data = get_astronomical_data("-6.175", "106.827")
-    print(f"Astronomical data: {astro_data}")
-
-if __name__ == "__main__":
-    test_weather_api()
+    if score >= 8:
+        return "🌟 Sangat ideal untuk observasi hilal!"
+    elif score >= 6:
+        return "✅ Baik untuk observasi hilal"
+    elif score >= 4:
+        return "⚠️ Cukup, tapi tidak optimal"
+    else:
+        return "❌ Tidak disarankan untuk observasi"

@@ -6,20 +6,15 @@ runOnSave = true
 port = 8501
 enableCORS = false
 enableXsrfProtection = false
+maxUploadSize = 200
 
 [browser]
 gatherUsageStats = false
-showErrorDetails = true
+showErrorDetails = false
 
 [theme]
 primaryColor = "#FFD700"
-backgroundColor = "#0c0c2e"
-secondaryBackgroundColor = "#1a1a3a"
+backgroundColor = "#0c0c0c"
+secondaryBackgroundColor = "#1a1a2e"
 textColor = "#FFFFFF"
 font = "sans serif"
-
-[client]
-showErrorDetails = true
-
-[logger]
-level = "info"

@@ -2,6 +2,7 @@ import streamlit as st
 import os
 import sys
 from pathlib import Path
+import json
 
 # Add current directory to path
 sys.path.append(str(Path(__file__).parent))
@@ -9,7 +10,7 @@ sys.path.append(str(Path(__file__).parent))
 # Import dengan error handling
 try:
     from detect import detect_image, detect_video
-    from utils import get_weather
+    from utils import get_weather, get_city_coordinates, INDONESIAN_CITIES
     DETECTION_AVAILABLE = True
 except ImportError as e:
     st.error(f"Error importing modules: {e}")
@@ -19,719 +20,412 @@ except ImportError as e:
 assets_dir = Path("assets")
 assets_dir.mkdir(exist_ok=True)
 
-# Predefined cities in Indonesia
-CITIES = {
-    "Jakarta": {"lat": -6.2088, "lon": 106.8456, "timezone": "WIB"},
-    "Surabaya": {"lat": -7.2575, "lon": 112.7521, "timezone": "WIB"},
-    "Bandung": {"lat": -6.9175, "lon": 107.6191, "timezone": "WIB"},
-    "Medan": {"lat": 3.5952, "lon": 98.6722, "timezone": "WIB"},
-    "Semarang": {"lat": -6.9667, "lon": 110.4167, "timezone": "WIB"},
-    "Makassar": {"lat": -5.1477, "lon": 119.4327, "timezone": "WITA"},
-    "Palembang": {"lat": -2.9761, "lon": 104.7754, "timezone": "WIB"},
-    "Bandar Lampung": {"lat": -5.4292, "lon": 105.2610, "timezone": "WIB"},
-    "Denpasar": {"lat": -8.6705, "lon": 115.2126, "timezone": "WITA"},
-    "Balikpapan": {"lat": -1.2379, "lon": 116.8529, "timezone": "WITA"},
-    "Pontianak": {"lat": -0.0263, "lon": 109.3425, "timezone": "WIB"},
-    "Manado": {"lat": 1.4748, "lon": 124.8421, "timezone": "WIT"},
-    "Yogyakarta": {"lat": -7.7956, "lon": 110.3695, "timezone": "WIB"},
-    "Malang": {"lat": -7.9797, "lon": 112.6304, "timezone": "WIB"},
-    "Padang": {"lat": -0.9471, "lon": 100.4172, "timezone": "WIB"}
-}
-
-# Page config with astronomical theme
+# Page config dengan tema milky way
 st.set_page_config(
-    page_title="🌙 Deteksi Hilal - Astronomical Observatory", 
+    page_title="Deteksi Hilal - Observatorium Digital", 
     layout="wide",
-    initial_sidebar_state="expanded",
-    menu_items={
-        'Get Help': 'https://github.com/yourusername/hilal-deteksi',
-        'Report a bug': 'https://github.com/yourusername/hilal-deteksi/issues',
-        'About': "Aplikasi Deteksi Hilal dengan YOLOv5 dan Data Astronomis"
-    }
+    initial_sidebar_state="collapsed"
 )
 
-# Custom CSS for astronomical theme
+# Custom CSS untuk tema milky way
 st.markdown("""
 <style>
-    .main {
-        background: linear-gradient(135deg, #0c0c2e 0%, #1a1a3a 50%, #2d1b69 100%);
-        color: white;
-    }
-    
-    .stApp {
-        background: linear-gradient(135deg, #0c0c2e 0%, #1a1a3a 50%, #2d1b69 100%);
-    }
-    
-    .css-1d391kg {
-        background: rgba(255, 255, 255, 0.05);
-        backdrop-filter: blur(10px);
-        border-radius: 15px;
-        border: 1px solid rgba(255, 255, 255, 0.1);
-    }
-    
-    .stSelectbox > div > div {
-        background: rgba(255, 255, 255, 0.1);
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        border-radius: 8px;
-    }
-    
-    .stTextInput > div > div > input {
-        background: rgba(255, 255, 255, 0.1);
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        border-radius: 8px;
-        color: white;
-    }
-    
-    .stNumberInput > div > div > input {
-        background: rgba(255, 255, 255, 0.1);
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        border-radius: 8px;
-        color: white;
-    }
-    
-    .uploadedFile {
-        background: rgba(255, 255, 255, 0.1);
-        border-radius: 10px;
-        border: 2px dashed rgba(255, 255, 255, 0.3);
-    }
-    
-    .metric-container {
-        background: rgba(255, 255, 255, 0.1);
-        padding: 20px;
-        border-radius: 15px;
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        text-align: center;
-    }
-    
-    .stButton > button {
-        background: linear-gradient(45deg, #FF6B35, #F7931E);
-        color: white;
-        border: none;
-        border-radius: 25px;
-        padding: 10px 30px;
-        font-weight: bold;
-        box-shadow: 0 4px 15px rgba(255, 107, 53, 0.3);
-        transition: all 0.3s ease;
-    }
-    
-    .stButton > button:hover {
-        background: linear-gradient(45deg, #F7931E, #FF6B35);
-        box-shadow: 0 6px 20px rgba(255, 107, 53, 0.4);
-        transform: translateY(-2px);
-    }
-    
-    .sidebar .sidebar-content {
-        background: rgba(12, 12, 46, 0.8);
-    }
-    
-    h1, h2, h3 {
-        color: #FFD700 !important;
-        text-shadow: 0 0 10px rgba(255, 215, 0, 0.3);
-    }
-    
-    .stSuccess {
-        background: rgba(0, 255, 0, 0.1);
-        border: 1px solid rgba(0, 255, 0, 0.3);
-        border-radius: 10px;
-    }
-    
-    .stWarning {
-        background: rgba(255, 193, 7, 0.1);
-        border: 1px solid rgba(255, 193, 7, 0.3);
-        border-radius: 10px;
-    }
-    
-    .stError {
-        background: rgba(255, 0, 0, 0.1);
-        border: 1px solid rgba(255, 0, 0, 0.3);
-        border-radius: 10px;
-    }
-    
-    /* Animated stars background */
-    .stars {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        pointer-events: none;
-        z-index: -1;
-    }
-    
-    .star {
-        position: absolute;
-        width: 2px;
-        height: 2px;
-        background: white;
-        border-radius: 50%;
-        animation: twinkle 3s infinite;
-    }
-    
-    @keyframes twinkle {
-        0%, 100% { opacity: 0; }
-        50% { opacity: 1; }
-    }
+.stApp {
+    background: linear-gradient(135deg, #0c0c0c 0%, #1a1a2e 50%, #16213e 100%);
+    background-image: 
+        radial-gradient(white, rgba(255,255,255,.2) 2px, transparent 40px),
+        radial-gradient(white, rgba(255,255,255,.15) 1px, transparent 30px),
+        radial-gradient(white, rgba(255,255,255,.1) 2px, transparent 40px),
+        radial-gradient(rgba(255,255,255,.4), rgba(255,255,255,.1) 2px, transparent 30px);
+    background-size: 550px 550px, 350px 350px, 250px 250px, 150px 150px;
+    background-position: 0 0, 40px 60px, 130px 270px, 70px 100px;
+    color: white;
+}
+
+.main-header {
+    text-align: center;
+    color: #ffffff;
+    font-size: 3rem;
+    font-weight: bold;
+    margin-bottom: 2rem;
+    text-shadow: 0 0 20px rgba(255,255,255,0.5);
+}
+
+.section-header {
+    color: #87ceeb;
+    font-size: 1.5rem;
+    font-weight: bold;
+    margin-top: 2rem;
+    margin-bottom: 1rem;
+    text-shadow: 0 0 10px rgba(135,206,235,0.3);
+}
+
+.stButton > button {
+    background: linear-gradient(45deg, #1e3c72, #2a5298);
+    color: white;
+    border: none;
+    border-radius: 10px;
+    padding: 0.5rem 2rem;
+    font-weight: bold;
+    box-shadow: 0 4px 15px rgba(46, 82, 152, 0.3);
+    transition: all 0.3s ease;
+}
+
+.stButton > button:hover {
+    background: linear-gradient(45deg, #2a5298, #1e3c72);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(46, 82, 152, 0.4);
+}
+
+.metric-container {
+    background: rgba(255, 255, 255, 0.1);
+    padding: 1rem;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(10px);
+    margin: 0.5rem 0;
+}
+
+.weather-info {
+    background: rgba(135, 206, 235, 0.1);
+    padding: 1rem;
+    border-radius: 10px;
+    border: 1px solid rgba(135, 206, 235, 0.3);
+    margin: 1rem 0;
+}
+
+.stSelectbox > div > div {
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+}
+
+.stTextInput > div > div > input {
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.stNumberInput > div > div > input {
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
 </style>
-
-<div class="stars">
-    <div class="star" style="top: 20%; left: 10%; animation-delay: 0s;"></div>
-    <div class="star" style="top: 30%; left: 80%; animation-delay: 1s;"></div>
-    <div class="star" style="top: 60%; left: 20%; animation-delay: 2s;"></div>
-    <div class="star" style="top: 80%; left: 90%; animation-delay: 0.5s;"></div>
-    <div class="star" style="top: 15%; left: 50%; animation-delay: 1.5s;"></div>
-    <div class="star" style="top: 70%; left: 60%; animation-delay: 2.5s;"></div>
-    <div class="star" style="top: 40%; left: 30%; animation-delay: 3s;"></div>
-    <div class="star" style="top: 25%; left: 70%; animation-delay: 0.8s;"></div>
-</div>
 """, unsafe_allow_html=True)
 
-# Header dengan tema astronomis
-st.markdown("""
-<div style="text-align: center; padding: 20px; margin-bottom: 30px;">
-    <h1 style="font-size: 3em; margin-bottom: 10px;">🌙 HILAL DETECTION OBSERVATORY</h1>
-    <p style="font-size: 1.2em; color: #B8860B; margin-bottom: 0;">
-        ✨ Advanced Crescent Moon Detection with YOLOv5 & Astronomical Data Integration ✨
-    </p>
-    <div style="margin-top: 15px;">
-        <span style="background: rgba(255, 215, 0, 0.2); padding: 5px 15px; border-radius: 20px; margin: 0 10px;">🔭 Computer Vision</span>
-        <span style="background: rgba(255, 215, 0, 0.2); padding: 5px 15px; border-radius: 20px; margin: 0 10px;">🌌 Sky Quality</span>
-        <span style="background: rgba(255, 215, 0, 0.2); padding: 5px 15px; border-radius: 20px; margin: 0 10px;">🌤️ Weather Data</span>
-    </div>
-</div>
-""", unsafe_allow_html=True)
+# Header utama
+st.markdown('<div class="main-header">🌙 Observatorium Deteksi Hilal Digital</div>', unsafe_allow_html=True)
 
 # Cek status sistem
 if not DETECTION_AVAILABLE:
     st.error("⚠️ Sistem deteksi tidak tersedia. Beberapa fungsi mungkin tidak berjalan optimal.")
-    st.info("Aplikasi tetap dapat digunakan untuk input data SQM dan cuaca.")
+    st.info("Aplikasi tetap dapat digunakan untuk input data SQM dan informasi cuaca.")
 
-# Sidebar untuk informasi tambahan
-with st.sidebar:
-    st.markdown("### 🌟 Observatory Status")
-    st.markdown(f"**🔧 Detection System:** {'🟢 Online' if DETECTION_AVAILABLE else '🔴 Offline'}")
-    st.markdown(f"**📡 Weather API:** 🟢 Active")
-    st.markdown(f"**💾 Storage:** 🟢 Ready")
+# --- Upload Gambar/Video ---
+st.markdown('<div class="section-header">📸 Unggah Media Observasi</div>', unsafe_allow_html=True)
+
+media_file = st.file_uploader(
+    "Pilih gambar atau video untuk dianalisis", 
+    type=["jpg", "png", "jpeg", "mp4", "mov", "avi"],
+    help="Format yang didukung: JPG, PNG, JPEG untuk gambar | MP4, MOV, AVI untuk video"
+)
+
+if media_file:
+    st.success(f"✅ File berhasil diunggah: {media_file.name}")
     
-    st.markdown("---")
-    st.markdown("### 📊 SQM Reference")
-    st.markdown("""
-    - **< 18**: 🏙️ City Sky (Poor)
-    - **18-20**: 🏘️ Suburban (Fair)  
-    - **20-21.5**: 🌾 Rural (Good)
-    - **> 21.5**: 🌌 Dark Sky (Excellent)
-    """)
-    
-    st.markdown("---")
-    st.markdown("### 🎯 Detection Classes")
-    st.markdown("""
-    - **Hilal**: 🌙 Crescent Moon
-    - **Confidence**: Minimum 25%
-    - **Resolution**: 640px optimal
-    """)
-
-# Main content area
-col1, col2 = st.columns([2, 1])
-
-with col1:
-    # --- Upload Gambar/Video ---
-    st.markdown("### 🎬 Media Upload Station")
-    media_file = st.file_uploader(
-        "Upload Gambar/Video Hilal untuk Analisis", 
-        type=["jpg", "png", "jpeg", "mp4", "mov", "avi"],
-        help="📸 Format Gambar: JPG, PNG, JPEG | 🎥 Format Video: MP4, MOV, AVI"
-    )
-
-    if media_file:
-        st.success(f"✅ **Media Loaded:** {media_file.name}")
-        
-        # Preview media dalam container yang lebih menarik
-        with st.container():
-            if media_file.type.startswith("image"):
-                st.image(media_file, caption="🖼️ Preview - Ready for Analysis", use_column_width=True)
-            else:
-                st.video(media_file)
-
-with col2:
-    # Info panel
-    st.markdown("### 📋 Analysis Info")
-    st.info("""
-    🔍 **Analysis Pipeline:**
-    1. Media preprocessing
-    2. YOLOv5 object detection  
-    3. Hilal identification
-    4. Bounding box generation
-    5. Confidence scoring
-    """)
+    # Preview media
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        if media_file.type.startswith("image"):
+            st.image(media_file, caption="Pratinjau Gambar", use_column_width=True)
+        else:
+            st.video(media_file)
 
 # --- Input SQM ---
-st.markdown("### 🌌 Sky Quality Measurement")
-col1, col2, col3 = st.columns([2, 1, 1])
+st.markdown('<div class="section-header">📊 Pengaturan Sky Quality Meter (SQM)</div>', unsafe_allow_html=True)
+
+col1, col2 = st.columns(2)
 
 with col1:
     sqm = st.number_input(
-        "Sky Quality Meter Reading:", 
+        "Masukkan Nilai SQM:", 
         min_value=0.0, 
         max_value=30.0, 
         step=0.1,
         value=20.0,
-        help="🌟 SQM measures sky darkness - higher values indicate darker, better skies for observation"
+        help="Nilai SQM menunjukkan kualitas langit (semakin tinggi = semakin gelap/baik untuk observasi)"
     )
 
 with col2:
     if sqm > 0:
         if sqm < 18:
-            quality = "🏙️ City Sky"
-            color = "🔴"
+            quality = "❌ Sangat Terang (Area Perkotaan)"
+            quality_desc = "Tidak ideal untuk observasi hilal"
         elif sqm < 20:
-            quality = "🏘️ Suburban"
-            color = "🟡"
+            quality = "⚠️ Terang (Area Suburban)"  
+            quality_desc = "Kurang ideal untuk observasi"
         elif sqm < 21.5:
-            quality = "🌾 Rural"
-            color = "🟢"
+            quality = "✅ Sedang (Area Pedesaan)"
+            quality_desc = "Cukup baik untuk observasi"
         else:
-            quality = "🌌 Dark Sky"
-            color = "⭐"
+            quality = "⭐ Sangat Gelap (Excellent)"
+            quality_desc = "Sangat ideal untuk observasi hilal"
         
         st.markdown(f"""
         <div class="metric-container">
-            <h4>{color} Sky Quality</h4>
-            <p>{quality}</p>
+            <strong>Kualitas Langit:</strong> {quality}<br>
+            <small>{quality_desc}</small>
         </div>
         """, unsafe_allow_html=True)
 
-with col3:
-    # Visibility prediction
-    if sqm > 21:
-        visibility = "Excellent"
-        vis_color = "🌟"
-    elif sqm > 19:
-        visibility = "Good"
-        vis_color = "✅"
-    elif sqm > 17:
-        visibility = "Fair"
-        vis_color = "⚠️"
-    else:
-        visibility = "Poor"
-        vis_color = "❌"
-    
-    st.markdown(f"""
-    <div class="metric-container">
-        <h4>{vis_color} Visibility</h4>
-        <p>{visibility}</p>
-    </div>
-    """, unsafe_allow_html=True)
+# --- Input Lokasi ---
+st.markdown('<div class="section-header">📍 Informasi Lokasi Observasi</div>', unsafe_allow_html=True)
 
-# --- Input Lokasi dengan opsi Kota atau Koordinat ---
-st.markdown("### 🌍 Location & Coordinates")
-
-# Toggle untuk memilih mode input
-location_mode = st.radio(
-    "Choose location input method:",
-    ["🏙️ Select City", "🎯 Manual Coordinates"],
+# Pilihan metode input lokasi
+location_method = st.radio(
+    "Pilih metode input lokasi:",
+    ["Pilih Kota", "Input Koordinat Manual"],
     horizontal=True
 )
 
-if location_mode == "🏙️ Select City":
-    col1, col2 = st.columns([2, 1])
+selected_lat = None
+selected_lon = None
+location_name = None
+
+if location_method == "Pilih Kota":
+    col1, col2 = st.columns(2)
     
     with col1:
         selected_city = st.selectbox(
-            "Select City in Indonesia:",
-            [""] + list(CITIES.keys()),
-            help="🗺️ Pre-configured coordinates for major Indonesian cities"
+            "Pilih Kota:",
+            [""] + list(INDONESIAN_CITIES.keys()),
+            help="Pilih kota untuk mendapatkan koordinat otomatis"
         )
     
     with col2:
         if selected_city:
-            city_data = CITIES[selected_city]
-            st.success(f"📍 **{selected_city}**")
-            st.write(f"📐 Lat: {city_data['lat']}")
-            st.write(f"📐 Lon: {city_data['lon']}")
-            st.write(f"🕐 Zone: {city_data['timezone']}")
-    
-    # Set coordinates from selected city
-    if selected_city:
-        lat = str(CITIES[selected_city]['lat'])
-        lon = str(CITIES[selected_city]['lon'])
-    else:
-        lat = ""
-        lon = ""
+            coords = INDONESIAN_CITIES[selected_city]
+            selected_lat = coords["lat"]
+            selected_lon = coords["lon"]
+            location_name = selected_city
+            st.success(f"📍 {selected_city}: {selected_lat}, {selected_lon}")
 
-else:  # Manual coordinates
+else:  # Input koordinat manual
     col1, col2 = st.columns(2)
     
     with col1:
-        lat = st.text_input(
-            "🌐 Latitude", 
+        lat_input = st.text_input(
+            "Latitude", 
             placeholder="-6.175",
-            help="📍 Latitude coordinate (example: -6.175 for Jakarta)"
+            help="Koordinat lintang (contoh: -6.175 untuk Jakarta)"
         )
     
     with col2:
-        lon = st.text_input(
-            "🌐 Longitude", 
+        lon_input = st.text_input(
+            "Longitude", 
             placeholder="106.827",
-            help="📍 Longitude coordinate (example: 106.827 for Jakarta)"
+            help="Koordinat bujur (contoh: 106.827 untuk Jakarta)"
         )
-
-# Validasi dan tampilkan koordinat
-if lat and lon:
-    try:
-        lat_float = float(lat)
-        lon_float = float(lon)
-        st.success(f"✅ **Coordinates Set:** {lat_float}°, {lon_float}°")
-        
-        # Tampilkan peta mini (placeholder)
-        col1, col2, col3 = st.columns([1, 2, 1])
-        with col2:
-            st.markdown(f"""
-            <div style="text-align: center; padding: 15px; background: rgba(255, 255, 255, 0.1); border-radius: 10px;">
-                <h4>🗺️ Observation Location</h4>
-                <p><strong>Coordinates:</strong> {lat_float}°N, {lon_float}°E</p>
-                <p><em>Ready for weather data retrieval</em></p>
-            </div>
-            """, unsafe_allow_html=True)
-            
-    except ValueError:
-        st.error("❌ Invalid coordinate format. Please use decimal numbers.")
-
-# --- Proses Deteksi ---
-st.markdown("### 🔍 Hilal Detection & Analysis")
-
-detection_col1, detection_col2 = st.columns([1, 1])
-
-with detection_col1:
-    process_button = st.button("🚀 Launch Detection Analysis", type="primary")
-
-with detection_col2:
-    if media_file:
-        st.metric("Media Status", "✅ Ready")
-    else:
-        st.metric("Media Status", "⏳ Waiting")
-
-if process_button:
-    if not media_file:
-        st.warning("⚠️ Please upload an image or video file first!")
-    else:
-        # Enhanced progress tracking
-        progress_container = st.container()
-        with progress_container:
-            progress_bar = st.progress(0)
-            status_text = st.empty()
-            
-            # Progress phases
-            phases = [
-                "🔄 Initializing detection system...",
-                "💾 Processing uploaded media...",
-                "🤖 Running YOLOv5 neural network...",
-                "🎯 Identifying hilal objects...",
-                "📊 Generating analysis results...",
-                "✅ Analysis complete!"
-            ]
-            
+    
+    if lat_input and lon_input:
         try:
-            # Phase 1: Initialize
-            status_text.text(phases[0])
-            progress_bar.progress(10)
+            selected_lat = float(lat_input)
+            selected_lon = float(lon_input)
+            location_name = f"Koordinat Manual ({selected_lat}, {selected_lon})"
+            st.success(f"📍 Koordinat: {selected_lat}, {selected_lon}")
+        except ValueError:
+            st.error("❌ Format koordinat tidak valid. Gunakan angka desimal.")
+
+# Tampilkan informasi cuaca jika lokasi tersedia
+if selected_lat and selected_lon:
+    try:
+        weather = get_weather(selected_lat, selected_lon)
+        
+        st.markdown(f"""
+        <div class="weather-info">
+            <h4>🌤️ Informasi Cuaca - {location_name}</h4>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.metric("🌡️ Suhu", f"{weather.get('suhu', 'N/A')}°C")
+        with col2:
+            st.metric("💧 Kelembapan", f"{weather.get('kelembapan', 'N/A')}%")
+        with col3:
+            st.metric("🌤️ Kondisi", weather.get('cuaca', 'N/A'))
+        with col4:
+            visibility = "Baik" if weather.get('kelembapan', 100) < 70 else "Sedang" if weather.get('kelembapan', 100) < 85 else "Buruk"
+            st.metric("👁️ Visibilitas", visibility)
             
+    except Exception as e:
+        st.warning(f"⚠️ Tidak dapat mengambil data cuaca: {str(e)}")
+
+# --- Tombol Proses ---
+st.markdown('<div class="section-header">🔍 Proses Analisis Hilal</div>', unsafe_allow_html=True)
+
+if st.button("🚀 Mulai Deteksi Hilal", type="primary"):
+    if not media_file:
+        st.warning("⚠️ Silakan unggah file gambar atau video terlebih dahulu!")
+    else:
+        # Progress bar
+        progress_bar = st.progress(0)
+        status_text = st.empty()
+        
+        try:
             # Save uploaded file
-            status_text.text(phases[1])
-            progress_bar.progress(25)
+            status_text.text("💾 Menyimpan file media...")
+            progress_bar.progress(20)
             
             save_path = assets_dir / media_file.name
             with open(save_path, "wb") as f:
                 f.write(media_file.getbuffer())
             
-            # Phase 2: Detection
-            status_text.text(phases[2])
-            progress_bar.progress(50)
-            
+            # Process detection
             if DETECTION_AVAILABLE:
-                status_text.text(phases[3])
-                progress_bar.progress(70)
+                status_text.text("🔍 Menganalisis dan mendeteksi hilal...")
+                progress_bar.progress(50)
                 
                 if media_file.type.startswith("image"):
                     output_path, csv_path = detect_image(str(save_path), "best.pt")
                 else:
                     output_path, csv_path = detect_video(str(save_path), "best.pt")
                 
-                status_text.text(phases[4])
-                progress_bar.progress(90)
+                progress_bar.progress(80)
                 
                 # Display results
                 if output_path and os.path.exists(output_path):
-                    status_text.text(phases[5])
-                    progress_bar.progress(100)
+                    st.success("✅ Deteksi hilal berhasil!")
                     
-                    st.success("🎉 **Detection Analysis Complete!**")
-                    
-                    # Enhanced result display
-                    result_col1, result_col2 = st.columns([2, 1])
-                    
-                    with result_col1:
-                        st.markdown("#### 🎯 Detection Results")
+                    col1, col2, col3 = st.columns([1, 2, 1])
+                    with col2:
                         if media_file.type.startswith("image"):
-                            st.image(output_path, caption="🌙 Hilal Detection with Bounding Boxes", use_column_width=True)
+                            st.image(output_path, caption="Hasil Deteksi Hilal dengan Bounding Box", use_column_width=True)
                         else:
                             st.video(output_path)
                     
-                    with result_col2:
-                        st.markdown("#### 📈 Detection Statistics")
-                        
-                        # Parse CSV to show detection stats
-                        if csv_path and os.path.exists(csv_path):
-                            import pandas as pd
-                            try:
-                                df = pd.read_csv(csv_path)
-                                detection_count = len(df)
-                                if detection_count > 0:
-                                    avg_confidence = df['confidence'].mean() * 100
-                                    max_confidence = df['confidence'].max() * 100
-                                    
-                                    st.metric("🎯 Detections Found", detection_count)
-                                    st.metric("📊 Avg Confidence", f"{avg_confidence:.1f}%")
-                                    st.metric("🏆 Best Confidence", f"{max_confidence:.1f}%")
-                                else:
-                                    st.metric("🎯 Detections Found", "0")
-                                    st.info("No hilal detected in this image/video")
-                            except:
-                                st.warning("Unable to parse detection data")
-                        
-                        # Analysis summary
-                        st.markdown("#### 🌟 Analysis Summary")
-                        st.info(f"""
-                        **Media Type:** {media_file.type.split('/')[0].title()}  
-                        **File Size:** {len(media_file.getvalue()) / 1024:.1f} KB  
-                        **Processing:** YOLOv5 Neural Network  
-                        **Confidence Threshold:** 25%
-                        """)
-                
+                    # Tampilkan informasi deteksi dari CSV
+                    if csv_path and os.path.exists(csv_path):
+                        import pandas as pd
+                        try:
+                            df = pd.read_csv(csv_path)
+                            if not df.empty:
+                                st.success(f"🌙 Terdeteksi {len(df)} objek hilal dengan tingkat kepercayaan rata-rata: {df['confidence'].mean():.2%}")
+                                
+                                # Tampilkan detail deteksi
+                                st.subheader("📋 Detail Hasil Deteksi")
+                                for i, row in df.iterrows():
+                                    col1, col2, col3, col4 = st.columns(4)
+                                    with col1:
+                                        st.metric(f"Hilal {i+1} - X", f"{row['x1']:.0f}-{row['x2']:.0f}")
+                                    with col2:
+                                        st.metric(f"Hilal {i+1} - Y", f"{row['y1']:.0f}-{row['y2']:.0f}")
+                                    with col3:
+                                        st.metric("Kepercayaan", f"{row['confidence']:.1%}")
+                                    with col4:
+                                        confidence_level = "Tinggi" if row['confidence'] > 0.7 else "Sedang" if row['confidence'] > 0.4 else "Rendah"
+                                        st.metric("Kualitas", confidence_level)
+                            else:
+                                st.info("🔍 Tidak ada hilal yang terdeteksi dalam media ini")
+                        except Exception as e:
+                            st.warning(f"Tidak dapat membaca hasil deteksi: {e}")
                 else:
-                    st.error("❌ Detection processing failed")
+                    st.error("❌ Gagal memproses deteksi")
             else:
-                st.warning("⚠️ Detection system unavailable - showing original file")
+                st.warning("⚠️ Sistem deteksi tidak tersedia, menampilkan file asli")
                 output_path = str(save_path)
                 csv_path = None
-                progress_bar.progress(100)
-                status_text.text("✅ File processed (detection unavailable)")
-                
-                # Show original file
-                if media_file.type.startswith("image"):
-                    st.image(output_path, caption="📷 Original Image (Detection Unavailable)", use_column_width=True)
+            
+            progress_bar.progress(100)
+            status_text.text("✅ Analisis selesai!")
+            
+            # Display SQM analysis
+            st.subheader("📊 Analisis Kondisi Observasi")
+            col1, col2, col3, col4 = st.columns(4)
+            
+            with col1:
+                st.metric("📏 Nilai SQM", f"{sqm}")
+            with col2:
+                if sqm > 21:
+                    obs_quality = "Sangat Baik"
+                elif sqm > 19:
+                    obs_quality = "Baik"
+                elif sqm > 17:
+                    obs_quality = "Cukup"
                 else:
-                    st.video(output_path)
+                    obs_quality = "Kurang Ideal"
+                st.metric("🔭 Kualitas Observasi", obs_quality)
+            with col3:
+                st.metric("📍 Lokasi", location_name if location_name else "Tidak Diset")
+            with col4:
+                overall_score = "Optimal" if sqm > 20 and selected_lat and selected_lon else "Baik" if sqm > 18 else "Perlu Perbaikan"
+                st.metric("⭐ Skor Keseluruhan", overall_score)
+
+            # Download buttons
+            st.subheader("📥 Unduh Hasil Analisis")
+            col1, col2, col3 = st.columns(3)
             
-            # Enhanced Information Panels
-            st.markdown("---")
-            
-            # Three-column layout for comprehensive info
-            info_col1, info_col2, info_col3 = st.columns(3)
-            
-            with info_col1:
-                st.markdown("#### 🌌 Sky Quality Analysis")
-                
-                # Enhanced SQM display
-                sqm_quality_map = {
-                    (0, 18): ("🏙️ City Sky", "Light pollution significant", "#FF6B6B"),
-                    (18, 20): ("🏘️ Suburban", "Moderate visibility", "#FFE66D"),
-                    (20, 21.5): ("🌾 Rural Sky", "Good conditions", "#4ECDC4"),
-                    (21.5, 30): ("🌌 Dark Sky", "Excellent visibility", "#45B7D1")
-                }
-                
-                for (min_val, max_val), (label, desc, color) in sqm_quality_map.items():
-                    if min_val <= sqm < max_val:
-                        st.markdown(f"""
-                        <div style="padding: 15px; background: {color}20; border-left: 4px solid {color}; border-radius: 5px; margin: 10px 0;">
-                            <h5 style="color: {color}; margin: 0;">{label}</h5>
-                            <p style="margin: 5px 0 0 0; color: white;">SQM: {sqm} | {desc}</p>
-                        </div>
-                        """, unsafe_allow_html=True)
-                        break
-            
-            with info_col2:
-                # Weather information
-                if lat and lon:
-                    st.markdown("#### 🌤️ Weather Conditions")
-                    try:
-                        status_text.text("🌡️ Retrieving weather data...")
-                        weather = get_weather(lat, lon)
-                        
-                        weather_metrics = [
-                            ("🌡️", "Temperature", f"{weather.get('suhu', 'N/A')}°C"),
-                            ("💧", "Humidity", f"{weather.get('kelembapan', 'N/A')}%"),
-                            ("☁️", "Condition", weather.get('cuaca', 'N/A'))
-                        ]
-                        
-                        for icon, label, value in weather_metrics:
-                            st.markdown(f"""
-                            <div style="display: flex; align-items: center; padding: 8px; background: rgba(255, 255, 255, 0.1); border-radius: 8px; margin: 5px 0;">
-                                <span style="font-size: 1.5em; margin-right: 10px;">{icon}</span>
-                                <div>
-                                    <strong>{label}:</strong> {value}
-                                </div>
-                            </div>
-                            """, unsafe_allow_html=True)
-                        
-                    except Exception as e:
-                        st.warning(f"⚠️ Weather data unavailable: {str(e)}")
-                else:
-                    st.info("📍 Set coordinates to view weather data")
-            
-            with info_col3:
-                st.markdown("#### 📥 Download Results")
-                
-                # Enhanced download section
-                download_options = []
-                
+            with col1:
                 if output_path and os.path.exists(output_path):
                     with open(output_path, "rb") as f:
-                        file_ext = Path(output_path).suffix.lower()
-                        if file_ext in ['.jpg', '.jpeg', '.png']:
-                            mime_type = "image/jpeg"
-                            icon = "🖼️"
-                            label = "Detection Image"
-                        else:
-                            mime_type = "video/mp4"
-                            icon = "🎥"
-                            label = "Detection Video"
-                        
+                        file_ext = Path(output_path).suffix
+                        mime_type = "image/jpeg" if file_ext.lower() in ['.jpg', '.jpeg'] else "video/mp4"
                         st.download_button(
-                            f"{icon} Download {label}",
+                            "🖼️ Unduh Hasil Deteksi",
                             f,
-                            file_name=f"hilal_detection_{Path(output_path).name}",
+                            file_name=f"hilal_terdeteksi_{Path(output_path).name}",
                             mime=mime_type
                         )
-                
+            
+            with col2:
                 if csv_path and os.path.exists(csv_path):
                     with open(csv_path, "rb") as f:
                         st.download_button(
-                            "📊 Download Detection Data",
+                            "📊 Unduh Data CSV",
                             f,
-                            file_name=f"hilal_data_{Path(csv_path).name}",
+                            file_name=f"data_hilal_{Path(csv_path).name}",
                             mime="text/csv"
                         )
-                
-                # Analysis report
-                if st.button("📋 Generate Report"):
-                    report_content = f"""
-# Hilal Detection Report
-**Generated:** {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')}
-
-## Analysis Parameters
-- **File:** {media_file.name if media_file else 'N/A'}
-- **SQM Value:** {sqm}
-- **Location:** {lat}, {lon} 
-- **Sky Quality:** {quality if sqm > 0 else 'N/A'}
-
-## Detection Results  
-- **Model:** YOLOv5
-- **Confidence Threshold:** 25%
-- **Status:** {'Complete' if DETECTION_AVAILABLE else 'Limited (Model Unavailable)'}
-
-## Observation Conditions
-- **Weather:** {weather.get('cuaca', 'N/A') if lat and lon else 'Not Available'}
-- **Temperature:** {weather.get('suhu', 'N/A')}°C
-- **Humidity:** {weather.get('kelembapan', 'N/A')}%
-                    """
-                    
-                    st.download_button(
-                        "📄 Download Full Report",
-                        report_content,
-                        file_name=f"hilal_report_{pd.Timestamp.now().strftime('%Y%m%d_%H%M')}.md",
-                        mime="text/markdown"
-                    )
             
-            # Clear progress indicators
+            with col3:
+                # Create report
+                report_data = {
+                    "lokasi": location_name,
+                    "koordinat": f"{selected_lat}, {selected_lon}" if selected_lat and selected_lon else "Tidak diset",
+                    "sqm": sqm,
+                    "kualitas_observasi": obs_quality,
+                    "file_media": media_file.name,
+                    "cuaca": weather if 'weather' in locals() else None
+                }
+                
+                report_json = json.dumps(report_data, indent=2, ensure_ascii=False)
+                st.download_button(
+                    "📄 Unduh Laporan JSON",
+                    report_json,
+                    file_name=f"laporan_observasi_{media_file.name.split('.')[0]}.json",
+                    mime="application/json"
+                )
+            
+            # Clear progress
             progress_bar.empty()
             status_text.empty()
             
         except Exception as e:
-            st.error(f"❌ Analysis failed: {str(e)}")
+            st.error(f"❌ Terjadi kesalahan: {str(e)}")
             progress_bar.empty()
             status_text.empty()
 
-# --- Enhanced Footer ---
+# --- Footer ---
 st.markdown("---")
 st.markdown("""
-<div style="text-align: center; padding: 30px; background: rgba(255, 255, 255, 0.05); border-radius: 15px; margin-top: 50px;">
-    <h3>🌟 Hilal Detection Observatory - Technical Specifications</h3>
-    
-    <div style="display: flex; justify-content: space-around; flex-wrap: wrap; margin: 20px 0;">
-        <div style="margin: 10px; padding: 15px; background: rgba(255, 215, 0, 0.1); border-radius: 10px; min-width: 200px;">
-            <h4>📊 Data Export</h4>
-            <p>CSV bounding boxes<br>Detection reports<br>Analysis summaries</p>
-        </div>
-    </div>
-    
-    <p style="margin-top: 30px; color: #B8860B;">
-        <strong>🔬 Research & Development:</strong> Advanced computer vision for Islamic astronomical observations<br>
-        <strong>📧 Support:</strong> Built for astronomers, researchers, and Islamic calendar authorities<br>
-        <strong>🚀 Version:</strong> Enhanced Observatory Edition with Astronomical Theme
-    </p>
-    
-    <div style="margin-top: 20px;">
-        <span style="background: rgba(255, 107, 53, 0.2); color: #FF6B35; padding: 8px 16px; border-radius: 20px; margin: 5px;">🔭 Computer Vision</span>
-        <span style="background: rgba(255, 215, 0, 0.2); color: #FFD700; padding: 8px 16px; border-radius: 20px; margin: 5px;">🌙 Hilal Detection</span>
-        <span style="background: rgba(70, 183, 209, 0.2); color: #46B7D1; padding: 8px 16px; border-radius: 20px; margin: 5px;">📡 Weather API</span>
-        <span style="background: rgba(78, 205, 196, 0.2); color: #4ECDC4; padding: 8px 16px; border-radius: 20px; margin: 5px;">🌌 Sky Quality</span>
-    </div>
+<div style="text-align: center; color: #87ceeb; margin-top: 2rem;">
+    <h3>🌟 Tentang Observatorium Digital</h3>
+    <p><strong>Deteksi Hilal Otomatis</strong> menggunakan teknologi Computer Vision terdepan dengan model YOLOv5/v8</p>
+    <p><strong>Integrasi SQM</strong> untuk analisis mendalam kondisi kualitas langit</p>  
+    <p><strong>Data Cuaca Real-time</strong> dari koordinat lokasi observasi</p>
+    <p><strong>Export Multi-format</strong> hasil analisis dalam berbagai format</p>
+    <br>
+    <p><em>🌙 Membantu komunitas astronomi dalam pengamatan hilal yang akurat dan ilmiah</em></p>
 </div>
 """, unsafe_allow_html=True)
-
-# Debug panel (development mode)
-if st.checkbox("🔧 Developer Debug Panel"):
-    with st.expander("System Diagnostics"):
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.write("**📊 System Status:**")
-            st.write(f"- Detection Available: {DETECTION_AVAILABLE}")
-            st.write(f"- Assets Directory: {assets_dir.absolute()}")
-            st.write(f"- Working Directory: {Path.cwd()}")
-            st.write(f"- Python Path: {sys.path[0]}")
-        
-        with col2:
-            st.write("**📁 File System:**")
-            if assets_dir.exists():
-                files = list(assets_dir.glob("*"))
-                if files:
-                    for file in files[-5:]:  # Show last 5 files
-                        st.write(f"- {file.name}")
-                else:
-                    st.write("- No files in assets/")
-            else:
-                st.write("- Assets directory not found")
-        
-        st.write("**🌐 Session State:**")
-        for key, value in st.session_state.items():
-            st.write(f"- {key}: {str(value)[:100]}...")
-
-# Additional imports for enhanced features
-try:
-    import pandas as pd
-except ImportError:
-    pd = None
-
-# Lalu untuk HTML, gunakan Streamlit markdown:
-if st.sidebar.button("Show Features"):
-    st.markdown("""
-    <div style="display: flex; flex-wrap: wrap; justify-content: center;">
-        <div style="margin: 10px; padding: 15px; background: rgba(255, 215, 0, 0.1); 
-             border-radius: 10px; min-width: 200px;">
-            <h4>🤖 AI Detection</h4>
-            <p>YOLOv5 Neural Network<br>Real-time object detection<br>25% confidence threshold</p>
-        </div>
-        
-        <div style="margin: 10px; padding: 15px; background: rgba(255, 215, 0, 0.1); 
-             border-radius: 10px; min-width: 200px;">
-            <h4>🌌 Sky Quality</h4>
-            <p>SQM Integration<br>Light pollution analysis<br>Visibility prediction</p>
-        </div>
-        
-        <div style="margin: 10px; padding: 15px; background: rgba(255, 215, 0, 0.1); 
-             border-radius: 10px; min-width: 200px;">
-            <h4>🌍 Location Services</h4>
-            <p>City presets available<br>Manual coordinates<br>Weather integration</p>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
