@@ -2,6 +2,7 @@ import streamlit as st
 from detect import detect_image, detect_video
 from utils import get_weather
 import os
+os.environ["OPENCV_VIDEOIO_PRIORITY_MSMF"] = "0"  # khusus video capture di headles
 
 st.set_page_config(page_title="Deteksi Hilal YOLOv5 + SQM/Hisab", layout="centered")
 st.title("🌙 Deteksi Hilal Otomatis")
