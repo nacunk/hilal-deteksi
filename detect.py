@@ -1,71 +1,66 @@
-import torch
 import cv2
 import os
+import pandas as pd
 from pathlib import Path
-from yolov5.models.common import DetectMultiBackend
-from yolov5.utils.general import non_max_suppression, scale_coords
-from yolov5.utils.torch_utils import select_device
+from ultralytics import YOLO
 
-# Fix untuk video capture headless di server
+# Fix untuk video capture headless
 os.environ["OPENCV_VIDEOIO_PRIORITY_MSMF"] = "0"
 
 def detect_image(image_path, model_path="best.pt"):
-    device = select_device('')
-    model = DetectMultiBackend(model_path, device=device)
-    
-    img = cv2.imread(image_path)
-    img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-    img_tensor = torch.from_numpy(img_rgb).permute(2,0,1).float() / 255.0
-    img_tensor = img_tensor.unsqueeze(0).to(device)
+    model = YOLO(model_path)
+    results = model.predict(source=image_path, imgsz=640, conf=0.25)
 
-    pred = model(img_tensor, augment=False)
-    pred = non_max_suppression(pred, conf_thres=0.25, iou_thres=0.45)
+    # Save image
+    output_dir = Path("assets")
+    output_dir.mkdir(exist_ok=True)
+    output_path = output_dir / f"detected_{Path(image_path).name}"
+    results[0].plot(save=True, save_path=str(output_path))
 
-    for det in pred:
-        if len(det):
-            det[:, :4] = scale_coords(img_tensor.shape[2:], det[:, :4], img.shape).round()
-            for *xyxy, conf, cls in det:
-                x1, y1, x2, y2 = map(int, xyxy)
-                cv2.rectangle(img, (x1,y1), (x2,y2), (0,255,0), 2)
-                cv2.putText(img, f"Hilal {conf:.2f}", (x1, y1-10), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0,255,0),2)
+    # Save CSV
+    csv_path = output_dir / f"detected_{Path(image_path).stem}.csv"
+    if results[0].boxes is not None:
+        boxes = results[0].boxes.xyxy.cpu().numpy()
+        conf = results[0].boxes.conf.cpu().numpy()
+        cls = results[0].boxes.cls.cpu().numpy()
+        df = pd.DataFrame({
+            "x1": boxes[:,0],
+            "y1": boxes[:,1],
+            "x2": boxes[:,2],
+            "y2": boxes[:,3],
+            "conf": conf,
+            "class": cls
+        })
+        df.to_csv(csv_path, index=False)
+    else:
+        csv_path = None
 
-    output_path = os.path.join("assets", "detected_"+Path(image_path).name)
-    cv2.imwrite(output_path, img)
-    return output_path
+    return str(output_path), str(csv_path)
 
 def detect_video(video_path, model_path="best.pt"):
-    device = select_device('')
-    model = DetectMultiBackend(model_path, device=device)
+    model = YOLO(model_path)
+    output_dir = Path("assets")
+    output_dir.mkdir(exist_ok=True)
+    output_path = output_dir / f"detected_{Path(video_path).name}"
 
-    cap = cv2.VideoCapture(video_path)
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-    out_path = os.path.join("assets", "detected_"+Path(video_path).name)
-    out = None
+    results = model.predict(source=video_path, conf=0.25, save=True, save_path=str(output_path))
+    
+    # CSV untuk video: ambil frame pertama saja
+    csv_path = output_dir / f"detected_{Path(video_path).stem}.csv"
+    if results[0].boxes is not None:
+        boxes = results[0].boxes.xyxy.cpu().numpy()
+        conf = results[0].boxes.conf.cpu().numpy()
+        cls = results[0].boxes.cls.cpu().numpy()
+        df = pd.DataFrame({
+            "x1": boxes[:,0],
+            "y1": boxes[:,1],
+            "x2": boxes[:,2],
+            "y2": boxes[:,3],
+            "conf": conf,
+            "class": cls
+        })
+        df.to_csv(csv_path, index=False)
+    else:
+        csv_path = None
 
-    while cap.isOpened():
-        ret, frame = cap.read()
-        if not ret:
-            break
-        img_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        img_tensor = torch.from_numpy(img_rgb).permute(2,0,1).float()/255.0
-        img_tensor = img_tensor.unsqueeze(0).to(device)
-
-        pred = model(img_tensor, augment=False)
-        pred = non_max_suppression(pred, conf_thres=0.25, iou_thres=0.45)
-
-        for det in pred:
-            if len(det):
-                det[:, :4] = scale_coords(img_tensor.shape[2:], det[:, :4], frame.shape).round()
-                for *xyxy, conf, cls in det:
-                    x1, y1, x2, y2 = map(int, xyxy)
-                    cv2.rectangle(frame, (x1,y1), (x2,y2), (0,255,0),2)
-                    cv2.putText(frame, f"Hilal {conf:.2f}", (x1,y1-10), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0,255,0),2)
-
-        if out is None:
-            out = cv2.VideoWriter(out_path, fourcc, cap.get(cv2.CAP_PROP_FPS), (frame.shape[1], frame.shape[0]))
-        out.write(frame)
-
-    cap.release()
-    if out:
-        out.release()
-    return out_path
+    return str(output_path), str(csv_path) if csv_path else None

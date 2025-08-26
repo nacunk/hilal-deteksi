@@ -5,7 +5,7 @@ def get_weather(lat, lon):
     Ambil data cuaca dari BMKG (mock API)
     """
     try:
-        # Contoh endpoint mock BMKG, ganti sesuai API resmi
+        # Ganti endpoint dengan API resmi BMKG jika tersedia
         url = f"https://api.bmkg.go.id/cuaca?lat={lat}&lon={lon}"
         res = requests.get(url, timeout=5).json()
         return {
