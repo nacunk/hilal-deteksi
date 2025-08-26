@@ -5,4 +5,4 @@ pillow
 requests
 pandas
 matplotlib
-git+https://github.com/ultralytics/yolov5.git
+
