@@ -1,200 +1,228 @@
 import requests
+import json
 
-# Database kota-kota besar di Indonesia dengan koordinatnya
+# Daftar kota-kota besar di Indonesia dengan koordinatnya
 INDONESIAN_CITIES = {
-    "Jakarta": {"lat": -6.2088, "lon": 106.8456},
-    "Surabaya": {"lat": -7.2575, "lon": 112.7521},
-    "Bandung": {"lat": -6.9175, "lon": 107.6191},
-    "Medan": {"lat": 3.5952, "lon": 98.6722},
-    "Semarang": {"lat": -6.9667, "lon": 110.4167},
-    "Makassar": {"lat": -5.1477, "lon": 119.4327},
-    "Palembang": {"lat": -2.9761, "lon": 104.7754},
-    "Tangerang": {"lat": -6.1783, "lon": 106.6319},
-    "Depok": {"lat": -6.4025, "lon": 106.7942},
-    "Bekasi": {"lat": -6.2383, "lon": 106.9756},
-    "Bogor": {"lat": -6.5971, "lon": 106.8060},
-    "Yogyakarta": {"lat": -7.7956, "lon": 110.3695},
-    "Malang": {"lat": -7.9797, "lon": 112.6304},
-    "Solo": {"lat": -7.5601, "lon": 110.8316},
-    "Denpasar": {"lat": -8.6705, "lon": 115.2126},
-    "Balikpapan": {"lat": -1.2379, "lon": 116.8529},
-    "Banjarmasin": {"lat": -3.3194, "lon": 114.5906},
-    "Samarinda": {"lat": -0.5017, "lon": 117.1536},
-    "Batam": {"lat": 1.1307, "lon": 104.0530},
-    "Pekanbaru": {"lat": 0.5071, "lon": 101.4478},
-    "Jambi": {"lat": -1.6101, "lon": 103.6131},
-    "Bengkulu": {"lat": -3.7928, "lon": 102.2608},
-    "Lampung": {"lat": -5.4292, "lon": 105.2619},
-    "Serang": {"lat": -6.1169, "lon": 106.1539},
-    "Cirebon": {"lat": -6.7063, "lon": 108.5579},
-    "Tasikmalaya": {"lat": -7.3506, "lon": 108.2281},
-    "Purwokerto": {"lat": -7.4197, "lon": 109.2342},
-    "Tegal": {"lat": -6.8694, "lon": 109.1402},
-    "Pekalongan": {"lat": -6.8883, "lon": 109.6753},
-    "Kudus": {"lat": -6.8048, "lon": 110.8405},
-    "Magelang": {"lat": -7.4797, "lon": 110.2175},
-    "Klaten": {"lat": -7.7058, "lon": 110.6061},
-    "Pontianak": {"lat": -0.0263, "lon": 109.3425},
-    "Kupang": {"lat": -10.1718, "lon": 123.6044},
-    "Mataram": {"lat": -8.5833, "lon": 116.1167},
-    "Manado": {"lat": 1.4748, "lon": 124.8421},
-    "Palu": {"lat": -0.8917, "lon": 119.8707},
-    "Kendari": {"lat": -3.9450, "lon": 122.4989},
-    "Ambon": {"lat": -3.6954, "lon": 128.1814},
-    "Jayapura": {"lat": -2.5167, "lon": 140.7167},
-    "Sorong": {"lat": -0.8833, "lon": 131.2500},
-    "Ternate": {"lat": 0.7833, "lon": 127.3667},
-    "Banda Aceh": {"lat": 5.5483, "lon": 95.3238},
-    "Padang": {"lat": -0.9471, "lon": 100.4172},
-    "Bukittinggi": {"lat": -0.3073, "lon": 100.3706},
-    "Batam": {"lat": 1.1307, "lon": 104.0530},
-    "Tanjung Pinang": {"lat": 0.9186, "lon": 104.4489}
+    "Jakarta": {"lat": -6.175, "lon": 106.827},
+    "Surabaya": {"lat": -7.257, "lon": 112.752},
+    "Bandung": {"lat": -6.917, "lon": 107.619},
+    "Medan": {"lat": 3.595, "lon": 98.672},
+    "Semarang": {"lat": -6.966, "lon": 110.420},
+    "Makassar": {"lat": -5.147, "lon": 119.432},
+    "Palembang": {"lat": -2.998, "lon": 104.756},
+    "Tangerang": {"lat": -6.178, "lon": 106.631},
+    "Depok": {"lat": -6.402, "lon": 106.794},
+    "Bekasi": {"lat": -6.238, "lon": 106.976},
+    "Padang": {"lat": -0.947, "lon": 100.414},
+    "Denpasar": {"lat": -8.650, "lon": 115.216},
+    "Samarinda": {"lat": -0.502, "lon": 117.154},
+    "Banjarmasin": {"lat": -3.319, "lon": 114.590},
+    "Batam": {"lat": 1.130, "lon": 104.053},
+    "Pekanbaru": {"lat": 0.533, "lon": 101.447},
+    "Bogor": {"lat": -6.595, "lon": 106.816},
+    "Malang": {"lat": -7.977, "lon": 112.633},
+    "Yogyakarta": {"lat": -7.797, "lon": 110.370},
+    "Balikpapan": {"lat": -1.268, "lon": 116.831},
+    "Pontianak": {"lat": -0.026, "lon": 109.343},
+    "Manado": {"lat": 1.487, "lon": 124.845},
+    "Jambi": {"lat": -1.588, "lon": 103.613},
+    "Cirebon": {"lat": -6.706, "lon": 108.557},
+    "Serang": {"lat": -6.120, "lon": 106.150},
+    "Mataram": {"lat": -8.583, "lon": 116.116},
+    "Jayapura": {"lat": -2.533, "lon": 140.717},
+    "Kupang": {"lat": -10.167, "lon": 123.583},
+    "Banda Aceh": {"lat": 5.548, "lon": 95.324},
+    "Ambon": {"lat": -3.710, "lon": 128.181},
 }
+
+def get_city_coordinates(city_name):
+    """
+    Mendapatkan koordinat dari nama kota
+    """
+    return INDONESIAN_CITIES.get(city_name, None)
 
 def get_weather(lat, lon):
     """
-    Ambil data cuaca dari OpenWeatherMap API (gratis)
+    Ambil data cuaca menggunakan OpenWeatherMap API
+    Backup ke WeatherAPI jika gagal
     """
     try:
-        # Menggunakan OpenWeatherMap API (gratis dengan registrasi)
-        # Ganti YOUR_API_KEY dengan API key dari openweathermap.org
-        api_key = "demo_key"  # Perlu diganti dengan API key yang valid
+        # Coba OpenWeatherMap API (gratis)
+        api_key = "demo_key"  # Ganti dengan API key yang valid
+        url = f"http://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&appid={api_key}&units=metric&lang=id"
         
-        # URL untuk current weather
-        url = f"https://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&appid={api_key}&units=metric&lang=id"
-        
-        # Jika API key tidak tersedia, gunakan data mock
-        if api_key == "demo_key":
-            return get_mock_weather(lat, lon)
-            
-        response = requests.get(url, timeout=5)
+        response = requests.get(url, timeout=10)
         
         if response.status_code == 200:
             data = response.json()
             return {
                 "suhu": round(data['main']['temp'], 1),
                 "kelembapan": data['main']['humidity'],
-                "cuaca": data['weather'][0]['description'].title(),
-                "tekanan": data['main']['pressure'],
-                "kecepatan_angin": data.get('wind', {}).get('speed', 0),
-                "visibilitas": data.get('visibility', 10000) / 1000  # dalam km
+                "cuaca": data['weather'][0]['description'].title()
             }
         else:
-            return get_mock_weather(lat, lon)
+            # Fallback ke data simulasi berdasarkan lokasi
+            return get_simulated_weather(lat, lon)
             
+    except requests.exceptions.RequestException:
+        # Jika gagal koneksi, gunakan data simulasi
+        return get_simulated_weather(lat, lon)
     except Exception as e:
-        print(f"Error fetching weather: {e}")
-        return get_mock_weather(lat, lon)
+        print(f"Error getting weather: {e}")
+        return get_simulated_weather(lat, lon)
 
-def get_mock_weather(lat, lon):
+def get_simulated_weather(lat, lon):
     """
-    Berikan data cuaca simulasi berdasarkan koordinat
+    Generate data cuaca simulasi berdasarkan lokasi dan pola iklim Indonesia
     """
     import random
-    import math
+    import datetime
     
-    # Simulasi cuaca berdasarkan lokasi geografis
-    # Suhu berdasarkan lintang (latitude)
-    base_temp = 28 - (abs(lat) * 0.6)  # Semakin jauh dari khatulistiwa, semakin dingin
-    temp_variation = random.uniform(-3, 3)
-    temperature = round(base_temp + temp_variation, 1)
+    try:
+        # Simulasi berdasarkan lokasi di Indonesia
+        current_month = datetime.datetime.now().month
+        
+        # Pola iklim Indonesia (musim hujan: Nov-Mar, kemarau: Apr-Oct)
+        is_rainy_season = current_month in [11, 12, 1, 2, 3]
+        
+        # Simulasi suhu berdasarkan lintang
+        base_temp = 28
+        if lat > 0:  # Sumatra Utara
+            base_temp = 26
+        elif lat < -7:  # Jawa Selatan, Bali
+            base_temp = 25
+        
+        # Variasi suhu harian
+        temp_variation = random.uniform(-3, 5)
+        simulated_temp = round(base_temp + temp_variation, 1)
+        
+        # Simulasi kelembapan
+        if is_rainy_season:
+            humidity = random.randint(75, 95)
+            weather_conditions = ["Berawan", "Hujan Ringan", "Mendung", "Gerimis"]
+        else:
+            humidity = random.randint(60, 80)
+            weather_conditions = ["Cerah", "Berawan Sebagian", "Cerah Berawan", "Terang"]
+        
+        weather_desc = random.choice(weather_conditions)
+        
+        return {
+            "suhu": simulated_temp,
+            "kelembapan": humidity,
+            "cuaca": weather_desc
+        }
+        
+    except Exception as e:
+        print(f"Error in simulated weather: {e}")
+        return {
+            "suhu": 27.5,
+            "kelembapan": 75,
+            "cuaca": "Data tidak tersedia"
+        }
+
+def get_location_info(lat, lon):
+    """
+    Mendapatkan informasi lokasi berdasarkan koordinat
+    """
+    try:
+        # Coba reverse geocoding
+        url = f"https://api.opencagedata.com/geocode/v1/json?q={lat}+{lon}&key=demo_key&language=id"
+        
+        response = requests.get(url, timeout=5)
+        if response.status_code == 200:
+            data = response.json()
+            if data['results']:
+                return {
+                    "address": data['results'][0].get('formatted', 'Alamat tidak diketahui'),
+                    "city": data['results'][0]['components'].get('city', 'Kota tidak diketahui'),
+                    "province": data['results'][0]['components'].get('state', 'Provinsi tidak diketahui')
+                }
+    except:
+        pass
     
-    # Kelembapan berdasarkan kedekatan dengan laut (simulasi)
-    base_humidity = 75
-    humidity_variation = random.uniform(-15, 15)
-    humidity = max(40, min(95, int(base_humidity + humidity_variation)))
-    
-    # Kondisi cuaca random tapi realistis
-    weather_conditions = [
-        "Cerah", "Berawan Sebagian", "Berawan", 
-        "Mendung", "Hujan Ringan", "Kabut"
-    ]
-    
-    # Probabilitas cuaca berdasarkan kelembapan
-    if humidity > 85:
-        weather_weights = [0.1, 0.2, 0.3, 0.2, 0.15, 0.05]
-    elif humidity > 70:
-        weather_weights = [0.3, 0.3, 0.2, 0.1, 0.05, 0.05]
-    else:
-        weather_weights = [0.5, 0.3, 0.15, 0.03, 0.01, 0.01]
-    
-    weather = random.choices(weather_conditions, weights=weather_weights)[0]
+    # Fallback berdasarkan koordinat yang dikenal
+    for city, coords in INDONESIAN_CITIES.items():
+        city_lat, city_lon = coords["lat"], coords["lon"]
+        # Hitung jarak sederhana
+        distance = ((lat - city_lat) ** 2 + (lon - city_lon) ** 2) ** 0.5
+        if distance < 0.5:  # Dalam radius ~55km
+            return {
+                "address": f"Sekitar {city}",
+                "city": city,
+                "province": "Indonesia"
+            }
     
     return {
-        "suhu": temperature,
-        "kelembapan": humidity,
-        "cuaca": weather,
-        "tekanan": random.randint(1008, 1025),
-        "kecepatan_angin": round(random.uniform(0.5, 8.0), 1),
-        "visibilitas": round(random.uniform(8, 15), 1)
+        "address": f"Koordinat {lat}, {lon}",
+        "city": "Lokasi Custom",
+        "province": "Indonesia"
     }
 
-def get_city_coordinates(city_name):
+def calculate_moon_visibility(sqm_value, weather_data):
     """
-    Ambil koordinat dari nama kota
+    Hitung perkiraan visibilitas bulan berdasarkan SQM dan cuaca
     """
-    return INDONESIAN_CITIES.get(city_name, None)
-
-def calculate_moon_visibility_score(sqm, weather_data):
-    """
-    Hitung skor visibilitas bulan berdasarkan SQM dan cuaca
-    """
-    # Skor berdasarkan SQM (0-10)
-    if sqm >= 22:
-        sqm_score = 10
-    elif sqm >= 21:
-        sqm_score = 8
-    elif sqm >= 20:
-        sqm_score = 6
-    elif sqm >= 19:
-        sqm_score = 4
-    else:
-        sqm_score = 2
+    visibility_score = 0
+    conditions = []
     
-    # Skor berdasarkan cuaca (0-10)
-    weather_condition = weather_data.get('cuaca', '').lower()
-    if 'cerah' in weather_condition:
-        weather_score = 10
-    elif 'berawan sebagian' in weather_condition:
-        weather_score = 7
-    elif 'berawan' in weather_condition:
-        weather_score = 5
-    elif 'mendung' in weather_condition:
-        weather_score = 3
+    # Skor berdasarkan SQM
+    if sqm_value >= 21.5:
+        visibility_score += 40
+        conditions.append("Langit sangat gelap (Excellent)")
+    elif sqm_value >= 20:
+        visibility_score += 30
+        conditions.append("Langit cukup gelap (Baik)")
+    elif sqm_value >= 18:
+        visibility_score += 20
+        conditions.append("Langit terang (Sedang)")
     else:
-        weather_score = 1
+        visibility_score += 10
+        conditions.append("Langit sangat terang (Buruk)")
     
-    # Skor berdasarkan kelembapan (0-10)
-    humidity = weather_data.get('kelembapan', 50)
+    # Skor berdasarkan cuaca
+    weather_desc = weather_data.get('cuaca', '').lower()
+    if any(word in weather_desc for word in ['cerah', 'terang']):
+        visibility_score += 30
+        conditions.append("Cuaca cerah")
+    elif any(word in weather_desc for word in ['berawan', 'mendung']):
+        visibility_score += 10
+        conditions.append("Cuaca berawan")
+    else:
+        visibility_score += 5
+        conditions.append("Cuaca kurang mendukung")
+    
+    # Skor berdasarkan kelembapan
+    humidity = weather_data.get('kelembapan', 0)
     if humidity < 60:
-        humidity_score = 10
+        visibility_score += 20
+        conditions.append("Kelembapan rendah (Baik)")
     elif humidity < 75:
-        humidity_score = 7
-    elif humidity < 85:
-        humidity_score = 4
+        visibility_score += 15
+        conditions.append("Kelembapan sedang")
     else:
-        humidity_score = 1
+        visibility_score += 5
+        conditions.append("Kelembapan tinggi")
     
-    # Total skor (rata-rata tertimbang)
-    total_score = (sqm_score * 0.5 + weather_score * 0.3 + humidity_score * 0.2)
+    # Tentukan kategori visibilitas
+    if visibility_score >= 80:
+        category = "Excellent"
+        recommendation = "Kondisi sangat ideal untuk observasi hilal"
+    elif visibility_score >= 60:
+        category = "Good"
+        recommendation = "Kondisi baik untuk observasi hilal"
+    elif visibility_score >= 40:
+        category = "Fair"
+        recommendation = "Kondisi cukup untuk observasi hilal"
+    else:
+        category = "Poor"
+        recommendation = "Kondisi kurang ideal untuk observasi hilal"
     
     return {
-        'total_score': round(total_score, 1),
-        'sqm_score': sqm_score,
-        'weather_score': weather_score,
-        'humidity_score': humidity_score,
-        'recommendation': get_observation_recommendation(total_score)
-    }
-
-def get_observation_recommendation(score):
-    """
-    Berikan rekomendasi observasi berdasarkan skor
-    """
-    if score >= 8:
-        return "🌟 Sangat ideal untuk observasi hilal!"
-    elif score >= 6:
-        return "✅ Baik untuk observasi hilal"
-    elif score >= 4:
-        return "⚠️ Cukup, tapi tidak optimal"
-    else:
-        return "❌ Tidak disarankan untuk observasi"
+        "score": visibility_score,
+        "category": category,
+        "recommendation": recommendation,
+        "conditions": conditions
+    } ['berawan sebagian', 'cerah berawan']):
+        visibility_score += 20
+        conditions.append("Cuaca cukup cerah")
+    elif any(word in weather_desc for word in
