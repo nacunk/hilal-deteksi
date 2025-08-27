@@ -1,5 +1,7 @@
 import requests
 import json
+import random
+import datetime
 
 # Daftar kota-kota besar di Indonesia dengan koordinatnya
 INDONESIAN_CITIES = {
@@ -44,7 +46,7 @@ def get_city_coordinates(city_name):
 def get_weather(lat, lon):
     """
     Ambil data cuaca menggunakan OpenWeatherMap API
-    Backup ke WeatherAPI jika gagal
+    Backup ke simulasi jika gagal
     """
     try:
         # Coba OpenWeatherMap API (gratis)
@@ -75,9 +77,6 @@ def get_simulated_weather(lat, lon):
     """
     Generate data cuaca simulasi berdasarkan lokasi dan pola iklim Indonesia
     """
-    import random
-    import datetime
-    
     try:
         # Simulasi berdasarkan lokasi di Indonesia
         current_month = datetime.datetime.now().month
@@ -184,6 +183,9 @@ def calculate_moon_visibility(sqm_value, weather_data):
     if any(word in weather_desc for word in ['cerah', 'terang']):
         visibility_score += 30
         conditions.append("Cuaca cerah")
+    elif any(word in weather_desc for word in ['berawan sebagian', 'cerah berawan']):
+        visibility_score += 20
+        conditions.append("Cuaca cukup cerah")
     elif any(word in weather_desc for word in ['berawan', 'mendung']):
         visibility_score += 10
         conditions.append("Cuaca berawan")
@@ -222,7 +224,4 @@ def calculate_moon_visibility(sqm_value, weather_data):
         "category": category,
         "recommendation": recommendation,
         "conditions": conditions
-    } ['berawan sebagian', 'cerah berawan']):
-        visibility_score += 20
-        conditions.append("Cuaca cukup cerah")
-    elif any(word in weather_desc for word in
+    }

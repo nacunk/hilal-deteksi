@@ -10,26 +10,17 @@ try:
     ULTRALYTICS_AVAILABLE = True
 except ImportError:
     ULTRALYTICS_AVAILABLE = False
-    print("Ultralytics not available, trying alternative imports...")
-    
-# Alternative import jika ultralytics tidak tersedia
-if not ULTRALYTICS_AVAILABLE:
-    try:
-        import torch
-        import torchvision
-        print("PyTorch available, using manual detection...")
-    except ImportError:
-        print("PyTorch also not available")
+    print("Ultralytics not available")
 
 # Fix untuk video capture headless
 os.environ["OPENCV_VIDEOIO_PRIORITY_MSMF"] = "0"
 
-def draw_minimal_bounding_box(image, boxes, confidences, classes, class_names=None):
+def draw_minimal_bounding_box(image, boxes, confidences, classes):
     """
     Gambar bounding box minimal dan akurat untuk hilal
     """
-    if class_names is None:
-        class_names = ["hilal"]
+    if len(boxes) == 0:
+        return image
     
     height, width = image.shape[:2]
     
@@ -134,6 +125,11 @@ def detect_image(image_path, model_path="best.pt"):
         if not ULTRALYTICS_AVAILABLE:
             return create_dummy_detection(image_path, "image")
             
+        # Check if model exists
+        if not os.path.exists(model_path):
+            print(f"Model file {model_path} not found, using dummy detection")
+            return create_dummy_detection(image_path, "image")
+            
         # Load model
         model = YOLO(model_path)
         
@@ -148,8 +144,8 @@ def detect_image(image_path, model_path="best.pt"):
         results = model.predict(
             source=image,
             imgsz=640,
-            conf=0.25,  # Threshold confidence
-            iou=0.45,   # Non-maximum suppression threshold
+            conf=0.25,
+            iou=0.45,
             save=False,
             verbose=False
         )
@@ -161,6 +157,10 @@ def detect_image(image_path, model_path="best.pt"):
         output_path = output_dir / f"detected_{Path(image_path).name}"
         
         # Process detections
+        boxes = np.array([])
+        confidences = np.array([])
+        classes = np.array([])
+        
         if len(results) > 0 and results[0].boxes is not None and len(results[0].boxes) > 0:
             boxes = results[0].boxes.xyxy.cpu().numpy()
             confidences = results[0].boxes.conf.cpu().numpy()
@@ -171,33 +171,20 @@ def detect_image(image_path, model_path="best.pt"):
             boxes = boxes[high_conf_mask]
             confidences = confidences[high_conf_mask]
             classes = classes[high_conf_mask]
+        
+        if len(boxes) > 0:
+            # Gambar bounding box custom
+            annotated_image = draw_minimal_bounding_box(
+                original_image, boxes, confidences, classes
+            )
             
-            if len(boxes) > 0:
-                # Gambar bounding box custom
-                annotated_image = draw_minimal_bounding_box(
-                    original_image, boxes, confidences, classes
-                )
-                
-                # Tambahkan info detection di pojok
-                info_text = f"Terdeteksi: {len(boxes)} Hilal"
-                cv2.putText(annotated_image, info_text,
-                           (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8,
-                           (0, 255, 0), 2)
-                
-                # Tambahkan timestamp
-                import datetime
-                timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                cv2.putText(annotated_image, f"Waktu: {timestamp}",
-                           (10, annotated_image.shape[0] - 10), 
-                           cv2.FONT_HERSHEY_SIMPLEX, 0.5,
-                           (255, 255, 255), 1)
-            else:
-                annotated_image = original_image
+            # Tambahkan info detection di pojok
+            info_text = f"Terdeteksi: {len(boxes)} Hilal"
+            cv2.putText(annotated_image, info_text,
+                       (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8,
+                       (0, 255, 0), 2)
         else:
             annotated_image = original_image
-            boxes = np.array([])
-            confidences = np.array([])
-            classes = np.array([])
         
         # Save annotated image
         cv2.imwrite(str(output_path), annotated_image)
@@ -219,6 +206,10 @@ def detect_video(video_path, model_path="best.pt"):
         if not ULTRALYTICS_AVAILABLE:
             return create_dummy_detection(video_path, "video")
             
+        if not os.path.exists(model_path):
+            print(f"Model file {model_path} not found, using dummy detection")
+            return create_dummy_detection(video_path, "video")
+            
         # Load model
         model = YOLO(model_path)
         
@@ -234,81 +225,69 @@ def detect_video(video_path, model_path="best.pt"):
             raise ValueError(f"Tidak dapat membuka video: {video_path}")
         
         # Get video properties
-        fps = int(cap.get(cv2.CAP_PROP_FPS))
+        fps = int(cap.get(cv2.CAP_PROP_FPS)) or 30
         width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         
         # Define codec and create VideoWriter
         fourcc = cv2.VideoWriter_fourcc(*'mp4v')
         out = cv2.VideoWriter(str(output_path), fourcc, fps, (width, height))
         
-        frame_detections = []
+        frame_detections = None
         frame_count = 0
-        detection_count = 0
-        
-        print(f"Processing {total_frames} frames...")
         
         while cap.isOpened():
             ret, frame = cap.read()
             if not ret:
                 break
                 
-            # Run detection on frame
-            results = model.predict(
-                source=frame,
-                imgsz=640,
-                conf=0.25,
-                iou=0.45,
-                verbose=False
-            )
-            
-            # Process frame
-            if len(results) > 0 and results[0].boxes is not None and len(results[0].boxes) > 0:
-                boxes = results[0].boxes.xyxy.cpu().numpy()
-                confidences = results[0].boxes.conf.cpu().numpy()
-                classes = results[0].boxes.cls.cpu().numpy()
-                
-                # Filter high confidence detections
-                high_conf_mask = confidences > 0.3
-                filtered_boxes = boxes[high_conf_mask]
-                filtered_confidences = confidences[high_conf_mask]
-                filtered_classes = classes[high_conf_mask]
-                
-                if len(filtered_boxes) > 0:
-                    # Draw bounding boxes
-                    annotated_frame = draw_minimal_bounding_box(
-                        frame.copy(), filtered_boxes, filtered_confidences, filtered_classes
+            # Run detection every 5th frame untuk performance
+            if frame_count % 5 == 0:
+                try:
+                    results = model.predict(
+                        source=frame,
+                        imgsz=640,
+                        conf=0.25,
+                        iou=0.45,
+                        verbose=False
                     )
                     
-                    # Add frame info
-                    cv2.putText(annotated_frame, f"Frame: {frame_count+1}/{total_frames}",
-                               (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6,
-                               (0, 255, 0), 2)
-                    
-                    detection_count += len(filtered_boxes)
-                    
-                    # Store first significant detection for CSV
-                    if not frame_detections and len(filtered_boxes) > 0:
-                        frame_detections = (filtered_boxes, filtered_confidences, filtered_classes)
-                else:
+                    # Process frame
+                    if len(results) > 0 and results[0].boxes is not None and len(results[0].boxes) > 0:
+                        boxes = results[0].boxes.xyxy.cpu().numpy()
+                        confidences = results[0].boxes.conf.cpu().numpy()
+                        classes = results[0].boxes.cls.cpu().numpy()
+                        
+                        # Filter high confidence detections
+                        high_conf_mask = confidences > 0.3
+                        filtered_boxes = boxes[high_conf_mask]
+                        filtered_confidences = confidences[high_conf_mask]
+                        filtered_classes = classes[high_conf_mask]
+                        
+                        if len(filtered_boxes) > 0:
+                            # Draw bounding boxes
+                            annotated_frame = draw_minimal_bounding_box(
+                                frame.copy(), filtered_boxes, filtered_confidences, filtered_classes
+                            )
+                            
+                            # Store first significant detection for CSV
+                            if frame_detections is None:
+                                frame_detections = (filtered_boxes, filtered_confidences, filtered_classes)
+                        else:
+                            annotated_frame = frame
+                    else:
+                        annotated_frame = frame
+                except:
                     annotated_frame = frame
             else:
                 annotated_frame = frame
                 
             out.write(annotated_frame)
             frame_count += 1
-            
-            # Progress indicator
-            if frame_count % 30 == 0:
-                progress = (frame_count / total_frames) * 100
-                print(f"Progress: {progress:.1f}% - Detections: {detection_count}")
         
         cap.release()
         out.release()
         cv2.destroyAllWindows()
-        
-        print(f"Video processing complete. Total detections: {detection_count}")
         
         # Save CSV for best frame
         csv_path = None
@@ -356,7 +335,6 @@ def save_detection_csv(boxes, confidences, classes, output_dir, filename_stem):
             
             # Sort by confidence descending
             df = df.sort_values('confidence', ascending=False).reset_index(drop=True)
-            
             df.to_csv(csv_path, index=False)
             return csv_path
         else:
@@ -406,44 +384,3 @@ def create_dummy_detection(file_path, media_type):
     except Exception as e:
         print(f"Error creating dummy detection: {e}")
         return None, None
-
-def analyze_detection_quality(csv_path):
-    """
-    Analisis kualitas deteksi berdasarkan data CSV
-    """
-    try:
-        if not os.path.exists(csv_path):
-            return None
-            
-        df = pd.read_csv(csv_path)
-        
-        if len(df) == 0:
-            return {"status": "no_detection", "message": "Tidak ada hilal yang terdeteksi"}
-        
-        # Analisis statistik
-        avg_confidence = df['confidence'].mean()
-        max_confidence = df['confidence'].max()
-        detection_count = len(df)
-        
-        # Kategorisasi kualitas
-        if avg_confidence > 0.8:
-            quality = "Excellent"
-        elif avg_confidence > 0.6:
-            quality = "Good"
-        elif avg_confidence > 0.4:
-            quality = "Fair"
-        else:
-            quality = "Poor"
-        
-        return {
-            "status": "detected",
-            "count": detection_count,
-            "average_confidence": round(avg_confidence, 3),
-            "max_confidence": round(max_confidence, 3),
-            "quality": quality,
-            "message": f"Terdeteksi {detection_count} hilal dengan kualitas {quality}"
-        }
-        
-    except Exception as e:
-        print(f"Error analyzing detection quality: {e}")
-        return {"status": "error", "message": "Error dalam analisis deteksi"}
