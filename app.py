@@ -1,78 +1,60 @@
 import streamlit as st
-import os
-from detect import detect_image, detect_video
-from utils import extract_gps_from_image, get_weather, search_city
+from utils import get_gps_from_image, get_weather, geocode_city
 
 st.set_page_config(page_title="🌙 Deteksi Hilal + Cuaca", layout="centered")
+st.title("🌙 Deteksi Hilal dan Informasi Cuaca")
+st.write("Upload foto hilal, sistem akan membaca metadata GPS dan menampilkan cuaca otomatis.")
 
-st.title("🌙 Deteksi Hilal Otomatis")
-st.write("Unggah gambar/video observasi hilal. Aplikasi akan menampilkan deteksi hilal dan informasi cuaca (suhu & kelembapan).")
+# Upload File Foto
+uploaded_file = st.file_uploader("Upload foto (JPEG/PNG)", type=["jpg","jpeg","png"])
+lat, lon = None, None
 
-# Upload file
-uploaded_file = st.file_uploader("Unggah file (gambar/video)", type=["jpg", "jpeg", "png", "mp4", "avi"])
+if uploaded_file:
+    lat, lon = get_gps_from_image(uploaded_file)
+    if lat and lon:
+        st.success(f"Metadata GPS ditemukan: Latitude {lat}, Longitude {lon}")
+    else:
+        st.info("Metadata GPS tidak ditemukan. Silakan pilih kota atau masukkan koordinat manual.")
 
-if uploaded_file is not None:
-    os.makedirs("temp", exist_ok=True)
-    file_path = os.path.join("temp", uploaded_file.name)
-    with open(file_path, "wb") as f:
-        f.write(uploaded_file.getbuffer())
+# Pilihan fallback
+fallback_option = None
+if not lat or not lon:
+    fallback_option = st.radio(
+        "Pilih metode input lokasi:",
+        ("Pilih Kota", "Isi Koordinat Manual")
+    )
 
-    # Tampilkan preview
-    if uploaded_file.type.startswith("image"):
-        st.image(file_path, caption="Citra Observasi", use_column_width=True)
-        output_img = detect_image(file_path)
-        st.image(output_img, caption="Hasil Deteksi", use_column_width=True)
+if fallback_option == "Pilih Kota":
+    # Dropdown kota default Indonesia
+    kota_dict = {
+        "Jakarta": (-6.2088, 106.8456),
+        "Bandung": (-6.9175, 107.6191),
+        "Surabaya": (-7.2575, 112.7521),
+        "Yogyakarta": (-7.7956, 110.3695),
+        "Medan": (3.5952, 98.6722)
+    }
 
-        # --- Cek metadata GPS ---
-        lat, lon = extract_gps_from_image(file_path)
-        if lat and lon:
-            st.success(f"📍 Lokasi terdeteksi: Latitude={lat}, Longitude={lon}")
-            weather = get_weather(lat, lon)
-            if weather:
-                st.subheader("🌤️ Informasi Cuaca")
-                st.write(f"Lokasi: {weather['city']}")
-                st.write(f"Suhu: {weather['temperature']} °C")
-                st.write(f"Kelembapan: {weather['humidity']} %")
-                st.write(f"Kondisi: {weather['description']}")
-        else:
-            st.warning("❗ Metadata GPS tidak ditemukan. Pilih opsi lokasi:")
-            opsi = st.radio("Metode lokasi:", ["Cari Kota (Auto-suggest)", "Isi Koordinat Manual"])
-            
-            if opsi == "Cari Kota (Auto-suggest)":
-                city_input = st.text_input("Ketik nama kota (misal: Surabaya, Jakarta, Makkah)")
-                if city_input:
-                    hasil = search_city(city_input)
-                    if hasil:
-                        pilihan = st.selectbox(
-                            "Pilih kota:",
-                            [f"{k['name']} ({k['country']}) - lat:{k['lat']}, lon:{k['lon']}" for k in hasil]
-                        )
-                        idx = [f"{k['name']} ({k['country']}) - lat:{k['lat']}, lon:{k['lon']}" for k in hasil].index(pilihan)
-                        lat, lon = hasil[idx]["lat"], hasil[idx]["lon"]
+    kota_input = st.text_input("Cari kota global")
+    kota_results = geocode_city(kota_input) if kota_input else []
 
-                        weather = get_weather(lat, lon)
-                        if weather:
-                            st.subheader("🌤️ Informasi Cuaca")
-                            st.write(f"Lokasi: {weather['city']}")
-                            st.write(f"Suhu: {weather['temperature']} °C")
-                            st.write(f"Kelembapan: {weather['humidity']} %")
-                            st.write(f"Kondisi: {weather['description']}")
-                    else:
-                        st.error("Tidak ditemukan kota dengan nama tersebut.")
+    if kota_results:
+        pilihan = st.selectbox("Pilih hasil kota", [f"{c['name']}, {c['country']}" for c in kota_results])
+        idx = [f"{c['name']}, {c['country']}" for c in kota_results].index(pilihan)
+        lat = kota_results[idx]['lat']
+        lon = kota_results[idx]['lon']
+    else:
+        kota_selected = st.selectbox("Pilih kota Indonesia", list(kota_dict.keys()))
+        lat, lon = kota_dict[kota_selected]
 
-            elif opsi == "Isi Koordinat Manual":
-                lat = st.number_input("Latitude", format="%.6f")
-                lon = st.number_input("Longitude", format="%.6f")
-                if lat and lon:
-                    weather = get_weather(lat, lon)
-                    if weather:
-                        st.subheader("🌤️ Informasi Cuaca")
-                        st.write(f"Lokasi: {weather['city']}")
-                        st.write(f"Suhu: {weather['temperature']} °C")
-                        st.write(f"Kelembapan: {weather['humidity']} %")
-                        st.write(f"Kondisi: {weather['description']}")
+elif fallback_option == "Isi Koordinat Manual":
+    lat = st.number_input("Latitude", format="%.6f")
+    lon = st.number_input("Longitude", format="%.6f")
 
-    elif uploaded_file.type.startswith("video"):
-        st.video(file_path)
-        output_video = detect_video(file_path)
-        st.video(output_video, format="video/mp4")
+# Tampilkan Cuaca jika koordinat ada
+if lat and lon:
+    data_cuaca = get_weather(lat, lon)
+    if data_cuaca:
+        st.subheader(f"Cuaca di {data_cuaca['lokasi']}")
+        st.write(f"Suhu: {data_cuaca['suhu']} °C")
+        st.write(f"Kelembapan: {data_cuaca['kelembapan']} %")
+        st.write(f"Kondisi: {data_cuaca['kondisi']}")
