@@ -7,7 +7,7 @@ OPENWEATHER_API_KEY = "API_key_kamu"
 
 def get_weather_data(lat, lon):
     """
-    Mengambil data cuaca dari OpenWeatherMap berdasarkan koordinat GPS.
+    Ambil data cuaca dari OpenWeatherMap berdasarkan koordinat GPS.
     """
     try:
         url = f"https://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&units=metric&lang=id&appid={OPENWEATHER_API_KEY}"
@@ -61,3 +61,24 @@ def extract_gps_from_image(file):
     except Exception as e:
         print("Error membaca metadata GPS:", e)
         return None, None
+
+
+def search_city(city_name):
+    """
+    Cari kota dengan OpenWeatherMap Geocoding API.
+    """
+    try:
+        url = f"http://api.openweathermap.org/geo/1.0/direct?q={city_name}&limit=5&appid={OPENWEATHER_API_KEY}"
+        res = requests.get(url).json()
+        hasil = []
+        for kota in res:
+            hasil.append({
+                "name": kota["name"],
+                "lat": kota["lat"],
+                "lon": kota["lon"],
+                "country": kota["country"]
+            })
+        return hasil
+    except Exception as e:
+        print("Error mencari kota:", e)
+        return []
