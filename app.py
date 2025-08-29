@@ -1,86 +1,78 @@
-import streamlit as st
-import os
-from detect import detect_image, detect_video
-from utils import extract_gps_from_image, get_weather, search_city
+import requests
+from PIL import Image
+from PIL.ExifTags import TAGS, GPSTAGS
 
-# Wajib Streamlit config
-st.set_page_config(page_title="🌙 Deteksi Hilal YOLOv5 + Cuaca", layout="centered")
+# =====================
+# Ekstrak GPS dari EXIF
+# =====================
+def extract_gps_from_image(image_file):
+    """Ekstrak metadata GPS dari gambar (jika ada)."""
+    try:
+        image = Image.open(image_file)
+        exif_data = image._getexif()
+        if not exif_data:
+            return None
 
-st.title("🌙 Deteksi Hilal Otomatis")
-st.write("Aplikasi ini menggunakan YOLOv5 untuk mendeteksi hilal dari citra/video observasi, "
-         "serta menampilkan informasi cuaca (suhu & kelembapan).")
+        gps_info = {}
+        for tag, value in exif_data.items():
+            tag_name = TAGS.get(tag)
+            if tag_name == "GPSInfo":
+                for key in value.keys():
+                    gps_info[GPSTAGS.get(key)] = value[key]
 
-# Upload file gambar/video
-uploaded_file = st.file_uploader("Unggah gambar atau video observasi hilal", type=["jpg", "jpeg", "png", "mp4", "avi"])
+        if gps_info:
+            lat = gps_info.get("GPSLatitude")
+            lat_ref = gps_info.get("GPSLatitudeRef")
+            lon = gps_info.get("GPSLongitude")
+            lon_ref = gps_info.get("GPSLongitudeRef")
 
-if uploaded_file is not None:
-    file_path = os.path.join("temp", uploaded_file.name)
-    os.makedirs("temp", exist_ok=True)
-    with open(file_path, "wb") as f:
-        f.write(uploaded_file.getbuffer())
+            def convert_to_degrees(value):
+                d, m, s = value
+                return d[0] / d[1] + (m[0] / m[1]) / 60 + (s[0] / s[1]) / 3600
 
-    # Deteksi gambar/video
-    if uploaded_file.type.startswith("image"):
-        st.image(file_path, caption="Citra Observasi", use_container_width=True)
-        output_img = detect_image(file_path)
-        st.image(output_img, caption="Hasil Deteksi", use_container_width=True)
+            latitude = convert_to_degrees(lat)
+            longitude = convert_to_degrees(lon)
 
-        # --- GPS Metadata ---
-        lat, lon = extract_gps_from_image(file_path)
-        if lat and lon:
-            st.success(f"Metadata GPS terdeteksi: Latitude={lat}, Longitude={lon}")
-            weather = get_weather(lat, lon)
-            if weather:
-                st.subheader("🌤️ Informasi Cuaca")
-                st.write(f"Lokasi: {weather['city']}")
-                st.write(f"Suhu: {weather['temperature']} °C")
-                st.write(f"Kelembapan: {weather['humidity']} %")
-            else:
-                st.error("Gagal mengambil data cuaca.")
+            if lat_ref != "N":
+                latitude = -latitude
+            if lon_ref != "E":
+                longitude = -longitude
+
+            return latitude, longitude
         else:
-            st.warning("Metadata GPS tidak ditemukan pada gambar.")
+            return None
+    except Exception:
+        return None
 
-            # --- Opsi input lokasi manual ---
-            pilihan = st.radio("Pilih cara menentukan lokasi:", ["Cari Kota (Auto-suggest)", "Isi Koordinat Manual"])
 
-            if pilihan == "Cari Kota (Auto-suggest)":
-                city_name = st.text_input("Ketik nama kota (misalnya: Surabaya, Jakarta, Cairo, Makkah)")
+# =====================
+# Ambil Cuaca dari API
+# =====================
+def get_weather(lat, lon, api_key):
+    """Ambil data cuaca dari OpenWeatherMap berdasarkan koordinat."""
+    url = f"http://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&appid={api_key}&units=metric&lang=id"
+    response = requests.get(url)
+    if response.status_code == 200:
+        return response.json()
+    return None
 
-                if city_name:
-                    # Jika user tidak menulis kode negara, otomatis tambah ",ID"
-                    if "," not in city_name:
-                        city_name = city_name.strip() + ",ID"
 
-                    results = search_city(city_name)
-                    if results:
-                        kota_terpilih = st.selectbox(
-                            "Pilih kota:",
-                            [f"{k['name']} ({k['country']}) - lat:{k['lat']}, lon:{k['lon']}" for k in results]
-                        )
-                        idx = [f"{k['name']} ({k['country']}) - lat:{k['lat']}, lon:{k['lon']}" for k in results].index(kota_terpilih)
-                        lat, lon = results[idx]["lat"], results[idx]["lon"]
+# =====================
+# Auto-suggest Nama Kota
+# =====================
+def search_city(city_name, api_key):
+    """
+    Cari kota dengan nama tertentu menggunakan OpenWeatherMap Geocoding API.
+    """
+    url = f"http://api.openweathermap.org/geo/1.0/direct?q={city_name}&limit=5&appid={api_key}"
+    response = requests.get(url)
 
-                        weather = get_weather(lat, lon)
-                        if weather:
-                            st.subheader("🌤️ Informasi Cuaca")
-                            st.write(f"Lokasi: {weather['city']}")
-                            st.write(f"Suhu: {weather['temperature']} °C")
-                            st.write(f"Kelembapan: {weather['humidity']} %")
-                    else:
-                        st.error("Tidak ditemukan kota dengan nama tersebut.")
-
-            elif pilihan == "Isi Koordinat Manual":
-                lat = st.number_input("Latitude", format="%.6f")
-                lon = st.number_input("Longitude", format="%.6f")
-                if lat and lon:
-                    weather = get_weather(lat, lon)
-                    if weather:
-                        st.subheader("🌤️ Informasi Cuaca")
-                        st.write(f"Lokasi: {weather['city']}")
-                        st.write(f"Suhu: {weather['temperature']} °C")
-                        st.write(f"Kelembapan: {weather['humidity']} %")
-
-    elif uploaded_file.type.startswith("video"):
-        st.video(file_path)
-        output_video = detect_video(file_path)
-        st.video(output_video, format="video/mp4")
+    if response.status_code == 200:
+        data = response.json()
+        if data:
+            # ambil hanya data penting
+            return [{"name": f"{c['name']}, {c.get('country','')}", "lat": c["lat"], "lon": c["lon"]} for c in data]
+        else:
+            return []
+    else:
+        return []
