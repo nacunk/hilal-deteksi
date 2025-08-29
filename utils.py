@@ -66,9 +66,10 @@ def extract_gps_from_image(file):
 def search_city(city_name):
     """
     Cari kota dengan OpenWeatherMap Geocoding API.
+    Bisa menambahkan kode negara agar lebih akurat (contoh: Surabaya,ID).
     """
     try:
-        url = f"http://api.openweathermap.org/geo/1.0/direct?q={city_name}&limit=5&appid={OPENWEATHER_API_KEY}"
+        url = f"http://api.openweathermap.org/geo/1.0/direct?q={city_name}&limit=10&appid={OPENWEATHER_API_KEY}"
         res = requests.get(url).json()
         hasil = []
         for kota in res:
@@ -82,3 +83,4 @@ def search_city(city_name):
     except Exception as e:
         print("Error mencari kota:", e)
         return []
+
