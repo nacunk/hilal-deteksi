@@ -12,3 +12,6 @@ torchvision>=0.15.0
 pathlib2>=2.3.7
 python-dateutil>=2.8.2
 pytz>=2023.3
+piexif
+hachoir
+exifread
