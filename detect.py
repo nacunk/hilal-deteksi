@@ -83,7 +83,7 @@ def draw_enhanced_bounding_box(image, x1, y1, x2, y2, confidence, class_name="Hi
              primary_color, 2)
     
     # Create label background
-    label_text = f"ðŸŒ™ {class_name} {confidence*100:.1f}%"
+    label_text = f"🌙 {class_name} {confidence*100:.1f}%"
     
     # Calculate text size and position
     font_face = cv2.FONT_HERSHEY_SIMPLEX
@@ -205,7 +205,7 @@ def detect_image(image_path, model_path="best.pt"):
         
         # Add detection summary overlay
         if detections_data:
-            summary_text = f"ðŸŒ™ {len(detections_data)} Hilal Detected"
+            summary_text = f"🌙 {len(detections_data)} Hilal Detected"
             avg_conf = np.mean([d['confidence'] for d in detections_data]) * 100
             
             # Add summary at top of image
