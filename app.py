@@ -1,127 +1,64 @@
 import streamlit as st
 import os
 import sys
-import sqlite3
+from pathlib import Path
 import pandas as pd
 import numpy as np
+from datetime import datetime, timedelta
+import matplotlib.pyplot as plt
+import seaborn as sns
 import plotly.express as px
 import plotly.graph_objects as go
-from datetime import datetime, timedelta
-from pathlib import Path
-import json
+from plotly.subplots import make_subplots
 
 # Add current directory to path
 sys.path.append(str(Path(__file__).parent))
 
-# Import dengan error handling
+# Import with error handling
 try:
     from detect import detect_image, detect_video
     from utils import get_weather, get_astronomical_data, calculate_moon_phase
-    from research_analytics import HilalVisibilityAnalyzer, HistoricalDataManager
     DETECTION_AVAILABLE = True
 except ImportError as e:
     st.error(f"Error importing modules: {e}")
     DETECTION_AVAILABLE = False
 
-# Database setup
-def init_database():
-    """Initialize SQLite database for historical data"""
-    conn = sqlite3.connect('hilal_database.db')
-    cursor = conn.cursor()
-    
-    # Create tables for historical data
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS hilal_observations (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            observation_date TEXT NOT NULL,
-            latitude REAL NOT NULL,
-            longitude REAL NOT NULL,
-            city TEXT,
-            sqm_value REAL,
-            weather_condition TEXT,
-            temperature REAL,
-            humidity REAL,
-            visibility_km REAL,
-            hilal_detected INTEGER,
-            detection_confidence REAL,
-            observer_name TEXT,
-            equipment_used TEXT,
-            notes TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
-    
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS detection_results (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            observation_id INTEGER,
-            image_path TEXT,
-            detection_count INTEGER,
-            avg_confidence REAL,
-            max_confidence REAL,
-            bounding_boxes TEXT,
-            processing_time REAL,
-            model_version TEXT,
-            FOREIGN KEY (observation_id) REFERENCES hilal_observations (id)
-        )
-    ''')
-    
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS research_analysis (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            analysis_date TEXT,
-            total_observations INTEGER,
-            success_rate REAL,
-            correlation_sqm_detection REAL,
-            correlation_weather_detection REAL,
-            best_conditions TEXT,
-            recommendations TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
-    
-    conn.commit()
-    conn.close()
+# Auto-create directories
+for dir_name in ["assets", "data", "reports", "models"]:
+    Path(dir_name).mkdir(exist_ok=True)
 
-# Initialize database
-init_database()
-
-# Auto-create folder assets
-assets_dir = Path("assets")
-assets_dir.mkdir(exist_ok=True)
-
-# Extended cities with more data for research
+# Indonesian cities with enhanced data
 CITIES = {
-    "Jakarta": {"lat": -6.2088, "lon": 106.8456, "timezone": "WIB", "elevation": 8, "light_pollution": "high"},
-    "Surabaya": {"lat": -7.2575, "lon": 112.7521, "timezone": "WIB", "elevation": 3, "light_pollution": "high"},
-    "Bandung": {"lat": -6.9175, "lon": 107.6191, "timezone": "WIB", "elevation": 768, "light_pollution": "medium"},
-    "Medan": {"lat": 3.5952, "lon": 98.6722, "timezone": "WIB", "elevation": 25, "light_pollution": "medium"},
-    "Semarang": {"lat": -6.9667, "lon": 110.4167, "timezone": "WIB", "elevation": 2, "light_pollution": "medium"},
-    "Makassar": {"lat": -5.1477, "lon": 119.4327, "timezone": "WITA", "elevation": 2, "light_pollution": "medium"},
-    "Palembang": {"lat": -2.9761, "lon": 104.7754, "timezone": "WIB", "elevation": 8, "light_pollution": "medium"},
-    "Bandar Lampung": {"lat": -5.4292, "lon": 105.2610, "timezone": "WIB", "elevation": 10, "light_pollution": "low"},
-    "Denpasar": {"lat": -8.6705, "lon": 115.2126, "timezone": "WITA", "elevation": 4, "light_pollution": "medium"},
-    "Balikpapan": {"lat": -1.2379, "lon": 116.8529, "timezone": "WITA", "elevation": 10, "light_pollution": "medium"},
-    "Pontianak": {"lat": -0.0263, "lon": 109.3425, "timezone": "WIB", "elevation": 1, "light_pollution": "low"},
-    "Manado": {"lat": 1.4748, "lon": 124.8421, "timezone": "WIT", "elevation": 2, "light_pollution": "low"},
-    "Yogyakarta": {"lat": -7.7956, "lon": 110.3695, "timezone": "WIB", "elevation": 113, "light_pollution": "medium"},
-    "Malang": {"lat": -7.9797, "lon": 112.6304, "timezone": "WIB", "elevation": 440, "light_pollution": "low"},
-    "Padang": {"lat": -0.9471, "lon": 100.4172, "timezone": "WIB", "elevation": 5, "light_pollution": "medium"},
-    "Pekanbaru": {"lat": 0.5071, "lon": 101.4478, "timezone": "WIB", "elevation": 31, "light_pollution": "medium"},
-    "Jambi": {"lat": -1.6101, "lon": 103.6131, "timezone": "WIB", "elevation": 35, "light_pollution": "low"},
-    "Bengkulu": {"lat": -3.7928, "lon": 102.2607, "timezone": "WIB", "elevation": 10, "light_pollution": "low"},
-    "Mataram": {"lat": -8.5833, "lon": 116.1167, "timezone": "WITA", "elevation": 63, "light_pollution": "low"},
-    "Kupang": {"lat": -10.1772, "lon": 123.6070, "timezone": "WIT", "elevation": 110, "light_pollution": "low"}
+    "Jakarta": {"lat": -6.2088, "lon": 106.8456, "timezone": "WIB", "elevation": 8},
+    "Surabaya": {"lat": -7.2575, "lon": 112.7521, "timezone": "WIB", "elevation": 3},
+    "Bandung": {"lat": -6.9175, "lon": 107.6191, "timezone": "WIB", "elevation": 768},
+    "Medan": {"lat": 3.5952, "lon": 98.6722, "timezone": "WIB", "elevation": 25},
+    "Semarang": {"lat": -6.9667, "lon": 110.4167, "timezone": "WIB", "elevation": 3},
+    "Makassar": {"lat": -5.1477, "lon": 119.4327, "timezone": "WITA", "elevation": 8},
+    "Palembang": {"lat": -2.9761, "lon": 104.7754, "timezone": "WIB", "elevation": 8},
+    "Bandar Lampung": {"lat": -5.4292, "lon": 105.2610, "timezone": "WIB", "elevation": 52},
+    "Denpasar": {"lat": -8.6705, "lon": 115.2126, "timezone": "WITA", "elevation": 4},
+    "Balikpapan": {"lat": -1.2379, "lon": 116.8529, "timezone": "WITA", "elevation": 6},
+    "Pontianak": {"lat": -0.0263, "lon": 109.3425, "timezone": "WIB", "elevation": 2},
+    "Manado": {"lat": 1.4748, "lon": 124.8421, "timezone": "WIT", "elevation": 5},
+    "Yogyakarta": {"lat": -7.7956, "lon": 110.3695, "timezone": "WIB", "elevation": 113},
+    "Malang": {"lat": -7.9797, "lon": 112.6304, "timezone": "WIB", "elevation": 440},
+    "Padang": {"lat": -0.9471, "lon": 100.4172, "timezone": "WIB", "elevation": 3}
 }
 
-# Page config
+# Page configuration
 st.set_page_config(
     page_title="Hilal Detection Research System", 
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="expanded",
+    menu_items={
+        'Get Help': 'https://github.com/yourusername/hilal-research',
+        'Report a bug': 'https://github.com/yourusername/hilal-research/issues',
+        'About': "Sistem Penelitian Deteksi Hilal untuk Skripsi - Computer Vision & Astronomical Analysis"
+    }
 )
 
-# Enhanced CSS for research application
+# Enhanced CSS for research theme
 st.markdown("""
 <style>
     .main {
@@ -129,174 +66,183 @@ st.markdown("""
         color: white;
     }
     
-    .stApp {
-        background: linear-gradient(135deg, #0c0c2e 0%, #1a1a3a 50%, #2d1b69 100%);
-    }
-    
-    .research-card {
-        background: rgba(255, 255, 255, 0.05);
-        backdrop-filter: blur(10px);
-        border-radius: 15px;
-        border: 1px solid rgba(255, 255, 255, 0.1);
+    .research-header {
+        background: linear-gradient(90deg, #1e3c72 0%, #2a5298 100%);
         padding: 20px;
-        margin: 10px 0;
+        border-radius: 15px;
+        text-align: center;
+        margin-bottom: 30px;
+        border: 2px solid rgba(255, 215, 0, 0.3);
     }
     
-    .metric-container {
+    .metric-card {
         background: rgba(255, 255, 255, 0.1);
         padding: 20px;
         border-radius: 15px;
         border: 1px solid rgba(255, 255, 255, 0.2);
         text-align: center;
+        backdrop-filter: blur(10px);
     }
     
-    .analysis-header {
-        background: linear-gradient(45deg, #FF6B35, #F7931E);
-        color: white;
+    .research-note {
+        background: rgba(255, 215, 0, 0.1);
+        border-left: 4px solid #FFD700;
         padding: 15px;
-        border-radius: 10px;
-        text-align: center;
-        margin: 20px 0;
+        border-radius: 5px;
+        margin: 10px 0;
     }
     
-    h1, h2, h3 {
-        color: #FFD700 !important;
-        text-shadow: 0 0 10px rgba(255, 215, 0, 0.3);
+    .data-section {
+        background: rgba(0, 100, 150, 0.1);
+        padding: 20px;
+        border-radius: 10px;
+        border: 1px solid rgba(0, 150, 255, 0.3);
+        margin: 15px 0;
+    }
+    
+    .upload-area {
+        border: 2px dashed rgba(255, 215, 0, 0.5);
+        border-radius: 15px;
+        padding: 30px;
+        text-align: center;
+        background: rgba(255, 215, 0, 0.05);
+        margin: 20px 0;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# Header
+# Research Header
 st.markdown("""
-<div style="text-align: center; padding: 20px; margin-bottom: 30px;">
-    <h1 style="font-size: 3em; margin-bottom: 10px;">🌙 HILAL DETECTION RESEARCH SYSTEM</h1>
-    <p style="font-size: 1.2em; color: #B8860B; margin-bottom: 0;">
-        Sistem Deteksi Hilal Berbasis Citra dengan Integrasi Data Historis dan Analisis Visibilitas
-    </p>
+<div class="research-header">
+    <h1>🌙 SISTEM PENELITIAN DETEKSI HILAL</h1>
+    <h3>Computer Vision & Astronomical Data Analysis</h3>
+    <p><strong>Research Focus:</strong> Pengembangan Sistem Deteksi Hilal Berbasis Citra dan Integrasi Data Historis</p>
     <div style="margin-top: 15px;">
-        <span style="background: rgba(255, 215, 0, 0.2); padding: 5px 15px; border-radius: 20px; margin: 0 10px;">🔬 Computer Vision</span>
-        <span style="background: rgba(255, 215, 0, 0.2); padding: 5px 15px; border-radius: 20px; margin: 0 10px;">📊 Historical Analysis</span>
-        <span style="background: rgba(255, 215, 0, 0.2); padding: 5px 15px; border-radius: 20px; margin: 0 10px;">🌤️ Sky Conditions</span>
-        <span style="background: rgba(255, 215, 0, 0.2); padding: 5px 15px; border-radius: 20px; margin: 0 10px;">📈 Research Analytics</span>
+        <span style="background: rgba(255, 215, 0, 0.3); padding: 8px 15px; border-radius: 20px; margin: 5px;">
+            🔬 Computer Vision Research
+        </span>
+        <span style="background: rgba(0, 150, 255, 0.3); padding: 8px 15px; border-radius: 20px; margin: 5px;">
+            📊 Data Analysis
+        </span>
+        <span style="background: rgba(50, 205, 50, 0.3); padding: 8px 15px; border-radius: 20px; margin: 5px;">
+            🌌 Astronomical Integration
+        </span>
     </div>
 </div>
 """, unsafe_allow_html=True)
 
-# Sidebar untuk navigasi penelitian
+# Initialize session state for research data
+if 'research_data' not in st.session_state:
+    st.session_state.research_data = []
+
+if 'observation_log' not in st.session_state:
+    st.session_state.observation_log = []
+
+# Sidebar for research controls
 with st.sidebar:
-    st.markdown("### 🔬 Research Navigation")
+    st.markdown("### 🔬 Research Dashboard")
     
+    # Research mode selection
     research_mode = st.selectbox(
-        "Select Research Module:",
-        [
-            "🎯 Detection Analysis",
-            "📊 Historical Data",
-            "🌙 Visibility Prediction", 
-            "📈 Statistical Analysis",
-            "🗄️ Database Management",
-            "📋 Research Reports"
-        ]
+        "Research Mode:",
+        ["📊 Data Collection", "🔍 Analysis Mode", "📈 Statistical Review", "📋 Export Results"]
     )
     
     st.markdown("---")
-    st.markdown("### 📊 Database Status")
+    st.markdown("### 📊 Current Session")
+    st.metric("Observations", len(st.session_state.observation_log))
+    st.metric("Detections", len(st.session_state.research_data))
     
-    # Check database status
-    try:
-        conn = sqlite3.connect('hilal_database.db')
-        cursor = conn.cursor()
-        
-        cursor.execute("SELECT COUNT(*) FROM hilal_observations")
-        total_observations = cursor.fetchone()[0]
-        
-        cursor.execute("SELECT COUNT(*) FROM detection_results")
-        total_detections = cursor.fetchone()[0]
-        
-        conn.close()
-        
-        st.metric("Total Observations", total_observations)
-        st.metric("Detection Results", total_detections)
-        
-    except Exception as e:
-        st.error(f"Database error: {e}")
+    # Research settings
+    st.markdown("---")
+    st.markdown("### ⚙️ Research Settings")
+    
+    confidence_threshold = st.slider("Detection Confidence", 0.1, 0.9, 0.25, 0.05)
+    auto_save = st.checkbox("Auto-save Results", True)
+    include_weather = st.checkbox("Include Weather Data", True)
+    include_astronomical = st.checkbox("Include Astronomical Data", True)
     
     st.markdown("---")
-    st.markdown("### 🌟 SQM Quality Scale")
-    st.markdown("""
-    - **< 18**: 🏙️ City Sky (Poor)
-    - **18-20**: 🏘️ Suburban (Fair)  
-    - **20-21.5**: 🌾 Rural (Good)
-    - **> 21.5**: 🌌 Dark Sky (Excellent)
-    """)
+    st.markdown("### 📚 Research Notes")
+    research_notes = st.text_area(
+        "Session Notes:",
+        placeholder="Add research observations, methodology notes, or findings...",
+        height=100
+    )
 
-# Main content based on selected research mode
-if research_mode == "🎯 Detection Analysis":
-    st.markdown("""
-    <div class="analysis-header">
-        <h2>🎯 Hilal Detection Analysis Module</h2>
-        <p>Upload dan analisis citra/video hilal dengan AI detection</p>
-    </div>
-    """, unsafe_allow_html=True)
+# Main content based on research mode
+if research_mode == "📊 Data Collection":
+    st.markdown("## 📊 Data Collection Module")
     
-    # Media upload section
+    # Data collection interface
     col1, col2 = st.columns([2, 1])
     
     with col1:
-        st.markdown("### 📸 Media Upload")
+        st.markdown("""
+        <div class="upload-area">
+            <h3>🎬 Media Upload for Analysis</h3>
+            <p>Upload hilal images or videos for computer vision analysis</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
         media_file = st.file_uploader(
-            "Upload Citra/Video Hilal", 
+            "Upload Image/Video", 
             type=["jpg", "png", "jpeg", "mp4", "mov", "avi"],
-            help="Format: JPG, PNG, JPEG (images) | MP4, MOV, AVI (videos)"
+            help="Supported formats: JPG, PNG, JPEG (images) | MP4, MOV, AVI (videos)"
         )
         
         if media_file:
-            st.success(f"✅ Media loaded: {media_file.name}")
+            # Media preview and metadata
+            st.success(f"✅ **Media Loaded:** {media_file.name}")
+            
+            file_size = len(media_file.getvalue()) / 1024  # KB
+            st.info(f"📁 File Size: {file_size:.1f} KB | Type: {media_file.type}")
+            
             if media_file.type.startswith("image"):
-                st.image(media_file, caption="Preview", use_column_width=True)
+                st.image(media_file, caption="🖼️ Preview - Ready for Analysis", use_column_width=True)
             else:
                 st.video(media_file)
     
     with col2:
-        st.markdown("### ⚙️ Detection Settings")
+        st.markdown("### 📋 Observation Metadata")
         
-        confidence_threshold = st.slider(
-            "Confidence Threshold",
-            min_value=0.1,
-            max_value=0.9,
-            value=0.25,
-            step=0.05,
-            help="Minimum confidence untuk deteksi hilal"
+        # Observation details
+        observation_date = st.date_input("Observation Date", datetime.now())
+        observation_time = st.time_input("Observation Time", datetime.now().time())
+        
+        observer_name = st.text_input("Observer Name", placeholder="Research Team Member")
+        observation_type = st.selectbox(
+            "Observation Type:",
+            ["Research Data", "Validation Sample", "Test Case", "Field Observation"]
         )
         
-        image_size = st.selectbox(
-            "Processing Size",
-            [320, 640, 1280],
-            index=1,
-            help="Ukuran gambar untuk processing - lebih besar = lebih akurat tapi lambat"
+        weather_condition = st.selectbox(
+            "Visual Weather:",
+            ["Clear", "Partly Cloudy", "Cloudy", "Hazy", "Rainy"]
         )
         
-        save_to_database = st.checkbox(
-            "Save to Research Database",
-            value=True,
-            help="Simpan hasil ke database untuk analisis historis"
+        moon_visibility = st.selectbox(
+            "Moon Visibility:",
+            ["Clearly Visible", "Faintly Visible", "Not Visible", "Uncertain"]
         )
-    
-    # Location and conditions input
-    st.markdown("### 🌍 Observation Conditions")
+        
+        equipment_used = st.text_input("Equipment", placeholder="Camera model, telescope, etc.")
+
+    # Location and environmental data
+    st.markdown("### 🌍 Location & Environmental Parameters")
     
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        # Location selection
         location_mode = st.radio(
-            "Location Input:",
+            "Location Method:",
             ["🏙️ Select City", "🎯 Manual Coordinates"],
             horizontal=True
         )
         
         if location_mode == "🏙️ Select City":
             selected_city = st.selectbox(
-                "Indonesian Cities:",
+                "Indonesian City:",
                 [""] + list(CITIES.keys())
             )
             
@@ -304,1091 +250,1001 @@ if research_mode == "🎯 Detection Analysis":
                 city_data = CITIES[selected_city]
                 lat = str(city_data['lat'])
                 lon = str(city_data['lon'])
-                elevation = city_data['elevation']
-                light_pollution = city_data['light_pollution']
-                
-                st.info(f"📍 {selected_city}\n📏 Elevation: {elevation}m\n💡 Light Pollution: {light_pollution}")
-            else:
-                lat = lon = ""
-                elevation = light_pollution = None
+                st.success(f"📍 {selected_city} selected")
         else:
             lat = st.text_input("Latitude", placeholder="-6.175")
             lon = st.text_input("Longitude", placeholder="106.827")
-            elevation = st.number_input("Elevation (m)", value=0, step=1)
-            light_pollution = st.selectbox("Light Pollution", ["low", "medium", "high"])
     
     with col2:
-        # Sky conditions
-        st.markdown("**Sky Quality Measurement**")
+        # Sky Quality Meter
         sqm = st.number_input(
-            "SQM Reading:", 
-            min_value=10.0, 
-            max_value=25.0, 
+            "Sky Quality Meter (SQM):", 
+            min_value=0.0, 
+            max_value=30.0, 
             step=0.1,
-            value=20.0
+            value=20.0,
+            help="Higher values = darker skies = better observation conditions"
         )
         
-        cloud_cover = st.slider("Cloud Cover (%)", 0, 100, 20, 5)
-        seeing_conditions = st.selectbox(
-            "Seeing Conditions",
-            ["Excellent", "Good", "Fair", "Poor"]
-        )
-    
+        # Additional atmospheric parameters
+        humidity = st.number_input("Humidity (%)", 0, 100, 70)
+        wind_speed = st.number_input("Wind Speed (km/h)", 0.0, 50.0, 5.0)
+        
     with col3:
-        # Observer information for research
-        st.markdown("**Observer Information**")
-        observer_name = st.text_input("Observer Name", placeholder="Researcher Name")
-        equipment_used = st.text_input("Equipment", placeholder="Camera/Telescope model")
-        observation_notes = st.text_area("Notes", placeholder="Additional observations...", height=100)
+        # Observation conditions
+        seeing_conditions = st.selectbox(
+            "Atmospheric Seeing:",
+            ["Excellent (< 1\")", "Good (1-2\")", "Fair (2-3\")", "Poor (> 3\")"]
+        )
+        
+        moon_altitude = st.number_input("Moon Altitude (°)", -90.0, 90.0, 15.0)
+        sun_altitude = st.number_input("Sun Altitude (°)", -90.0, 90.0, -10.0)
+
+elif research_mode == "🔍 Analysis Mode":
+    st.markdown("## 🔍 Analysis & Detection Module")
     
-    # Detection processing
-    if st.button("🚀 Process Detection & Save to Database", type="primary"):
-        if not media_file:
-            st.warning("⚠️ Please upload media file first!")
-        elif not lat or not lon:
-            st.warning("⚠️ Please set location coordinates!")
+    # Analysis parameters
+    st.markdown("### ⚙️ Analysis Parameters")
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        detection_model = st.selectbox(
+            "Detection Model:",
+            ["YOLOv5s", "YOLOv5m", "YOLOv5l", "YOLOv8n", "YOLOv8s"]
+        )
+        
+        image_size = st.selectbox("Input Size:", [320, 416, 640, 832])
+        
+    with col2:
+        confidence_min = st.slider("Min Confidence", 0.1, 0.9, confidence_threshold)
+        iou_threshold = st.slider("IoU Threshold", 0.1, 0.9, 0.45)
+        
+    with col3:
+        augmentation = st.checkbox("Data Augmentation", False)
+        tta = st.checkbox("Test Time Augmentation", False)
+    
+    # Processing button
+    if st.button("🚀 Run Complete Analysis", type="primary"):
+        if 'media_file' in locals() and media_file:
+            with st.spinner("🔄 Running comprehensive analysis..."):
+                
+                # Create analysis container
+                analysis_container = st.container()
+                
+                with analysis_container:
+                    # Progress tracking
+                    progress_bar = st.progress(0)
+                    status_text = st.empty()
+                    
+                    try:
+                        # Phase 1: Preprocessing
+                        status_text.text("📊 Preprocessing data...")
+                        progress_bar.progress(20)
+                        
+                        # Save file
+                        save_path = Path("assets") / media_file.name
+                        with open(save_path, "wb") as f:
+                            f.write(media_file.getbuffer())
+                        
+                        # Phase 2: Detection
+                        status_text.text("🤖 Running detection model...")
+                        progress_bar.progress(50)
+                        
+                        if DETECTION_AVAILABLE:
+                            if media_file.type.startswith("image"):
+                                output_path, csv_path = detect_image(str(save_path), "best.pt")
+                            else:
+                                output_path, csv_path = detect_video(str(save_path), "best.pt")
+                        else:
+                            st.warning("⚠️ Detection model unavailable - using fallback")
+                            output_path = str(save_path)
+                            csv_path = None
+                        
+                        # Phase 3: Data integration
+                        status_text.text("🌍 Integrating environmental data...")
+                        progress_bar.progress(75)
+                        
+                        # Collect all analysis data
+                        analysis_data = {
+                            'timestamp': datetime.now(),
+                            'file_name': media_file.name,
+                            'file_size': len(media_file.getvalue()),
+                            'detection_model': detection_model,
+                            'confidence_threshold': confidence_min,
+                            'sqm_value': sqm,
+                            'weather_condition': weather_condition,
+                            'moon_visibility': moon_visibility,
+                            'observer': observer_name,
+                            'location_lat': float(lat) if lat else None,
+                            'location_lon': float(lon) if lon else None,
+                        }
+                        
+                        # Add weather data if enabled
+                        if include_weather and lat and lon:
+                            weather_data = get_weather(lat, lon)
+                            analysis_data.update({
+                                'weather_temp': weather_data.get('suhu', 'N/A'),
+                                'weather_humidity': weather_data.get('kelembapan', 'N/A'),
+                                'weather_condition_api': weather_data.get('cuaca', 'N/A')
+                            })
+                        
+                        # Add astronomical data if enabled
+                        if include_astronomical and lat and lon:
+                            astro_data = get_astronomical_data(lat, lon)
+                            if 'error' not in astro_data:
+                                analysis_data.update({
+                                    'moon_phase_deg': astro_data['moon_phase']['phase_degrees'],
+                                    'moon_phase_name': astro_data['moon_phase']['phase_name'],
+                                    'moon_illumination': astro_data['moon_phase']['illumination']
+                                })
+                        
+                        # Store in session
+                        st.session_state.research_data.append(analysis_data)
+                        
+                        # Complete
+                        status_text.text("✅ Analysis complete!")
+                        progress_bar.progress(100)
+                        
+                        # Display results
+                        st.success("🎉 **Analysis Complete!**")
+                        
+                        result_col1, result_col2 = st.columns([2, 1])
+                        
+                        with result_col1:
+                            st.markdown("#### 🎯 Detection Results")
+                            if output_path and os.path.exists(output_path):
+                                if media_file.type.startswith("image"):
+                                    st.image(output_path, caption="🌙 Hilal Detection Results", use_column_width=True)
+                                else:
+                                    st.video(output_path)
+                        
+                        with result_col2:
+                            st.markdown("#### 📊 Analysis Summary")
+                            
+                            # Detection statistics
+                            if csv_path and os.path.exists(csv_path):
+                                try:
+                                    df = pd.read_csv(csv_path, comment='#')
+                                    if len(df) > 0:
+                                        st.metric("🎯 Detections", len(df))
+                                        st.metric("📈 Avg Confidence", f"{df['confidence'].mean()*100:.1f}%")
+                                        st.metric("🏆 Best Detection", f"{df['confidence'].max()*100:.1f}%")
+                                    else:
+                                        st.metric("🎯 Detections", "0")
+                                        st.info("No hilal detected")
+                                except:
+                                    st.warning("Unable to parse detection data")
+                            
+                            # Save observation log
+                            log_entry = {
+                                'timestamp': datetime.now(),
+                                'file': media_file.name,
+                                'sqm': sqm,
+                                'visibility': moon_visibility,
+                                'weather': weather_condition,
+                                'detections': len(df) if 'df' in locals() and len(df) > 0 else 0
+                            }
+                            st.session_state.observation_log.append(log_entry)
+                            
+                            # Auto-save if enabled
+                            if auto_save:
+                                save_research_data()
+                                st.success("💾 Data auto-saved")
+                        
+                    except Exception as e:
+                        st.error(f"❌ Analysis failed: {str(e)}")
+                        progress_bar.empty()
+                        status_text.empty()
+        
         else:
-            with st.spinner("🔄 Processing detection and analysis..."):
+            st.warning("⚠️ No research data available for report generation")
+
+# Processing and detection section (moved from analysis mode)
+if research_mode == "📊 Data Collection" and 'media_file' in locals() and media_file:
+    st.markdown("### 🔬 Research Processing")
+    
+    if st.button("🚀 Process for Research", type="primary"):
+        with st.spinner("🔄 Processing research sample..."):
+            
+            # Create comprehensive research processing
+            progress_container = st.container()
+            
+            with progress_container:
+                progress_bar = st.progress(0)
+                status_text = st.empty()
+                
                 try:
+                    # Phase 1: Data preparation
+                    status_text.text("📊 Preparing research data...")
+                    progress_bar.progress(15)
+                    
                     # Save uploaded file
-                    save_path = assets_dir / media_file.name
+                    save_path = Path("assets") / media_file.name
                     with open(save_path, "wb") as f:
                         f.write(media_file.getbuffer())
                     
-                    # Run detection
+                    # Phase 2: Computer vision detection
+                    status_text.text("🤖 Running computer vision model...")
+                    progress_bar.progress(40)
+                    
+                    detection_results = {}
                     if DETECTION_AVAILABLE:
                         if media_file.type.startswith("image"):
                             output_path, csv_path = detect_image(str(save_path), "best.pt")
                         else:
                             output_path, csv_path = detect_video(str(save_path), "best.pt")
+                        
+                        # Parse detection results
+                        if csv_path and os.path.exists(csv_path):
+                            try:
+                                df_det = pd.read_csv(csv_path, comment='#')
+                                detection_results = {
+                                    'detection_count': len(df_det),
+                                    'avg_confidence': df_det['confidence'].mean() if len(df_det) > 0 else 0,
+                                    'max_confidence': df_det['confidence'].max() if len(df_det) > 0 else 0,
+                                    'detection_areas': df_det['area'].tolist() if 'area' in df_det.columns and len(df_det) > 0 else []
+                                }
+                            except:
+                                detection_results = {'detection_count': 0, 'avg_confidence': 0, 'max_confidence': 0}
                     else:
-                        st.warning("Detection model unavailable - using placeholder results")
                         output_path = str(save_path)
                         csv_path = None
+                        detection_results = {'detection_count': 0, 'error': 'Model unavailable'}
                     
-                    # Get weather data
-                    weather_data = get_weather(lat, lon)
+                    # Phase 3: Environmental data integration
+                    status_text.text("🌍 Collecting environmental data...")
+                    progress_bar.progress(65)
                     
-                    # Parse detection results
-                    detection_count = 0
-                    avg_confidence = 0
-                    max_confidence = 0
+                    environmental_data = {}
+                    if lat and lon and include_weather:
+                        weather_data = get_weather(lat, lon)
+                        environmental_data.update(weather_data)
                     
-                    if csv_path and os.path.exists(csv_path):
-                        try:
-                            df = pd.read_csv(csv_path)
-                            detection_count = len(df)
-                            if detection_count > 0:
-                                avg_confidence = df['confidence'].mean()
-                                max_confidence = df['confidence'].max()
-                        except:
-                            pass
+                    if lat and lon and include_astronomical:
+                        astro_data = get_astronomical_data(lat, lon)
+                        if 'error' not in astro_data:
+                            environmental_data.update({
+                                'moon_phase': astro_data.get('moon_phase', {}),
+                                'sun_position': astro_data.get('sun_position', {}),
+                                'qibla': astro_data.get('qibla', {})
+                            })
                     
-                    # Save to database if requested
-                    if save_to_database:
-                        conn = sqlite3.connect('hilal_database.db')
-                        cursor = conn.cursor()
-                        
-                        # Insert observation
-                        cursor.execute('''
-                            INSERT INTO hilal_observations 
-                            (observation_date, latitude, longitude, city, sqm_value, 
-                             weather_condition, temperature, humidity, hilal_detected, 
-                             detection_confidence, observer_name, equipment_used, notes)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        ''', (
-                            datetime.now().isoformat(),
-                            float(lat), float(lon),
-                            selected_city if location_mode == "🏙️ Select City" else f"Custom ({lat}, {lon})",
-                            sqm,
-                            weather_data.get('cuaca', 'Unknown'),
-                            weather_data.get('suhu', 0),
-                            weather_data.get('kelembapan', 0),
-                            1 if detection_count > 0 else 0,
-                            max_confidence,
-                            observer_name,
-                            equipment_used,
-                            observation_notes
-                        ))
-                        
-                        observation_id = cursor.lastrowid
-                        
-                        # Insert detection results
-                        cursor.execute('''
-                            INSERT INTO detection_results
-                            (observation_id, image_path, detection_count, avg_confidence, 
-                             max_confidence, processing_time, model_version)
-                            VALUES (?, ?, ?, ?, ?, ?, ?)
-                        ''', (
-                            observation_id,
-                            str(output_path),
-                            detection_count,
-                            avg_confidence,
-                            max_confidence,
-                            2.5,  # Placeholder processing time
-                            "YOLOv5"
-                        ))
-                        
-                        conn.commit()
-                        conn.close()
-                        
-                        st.success(f"✅ Data saved to research database (ID: {observation_id})")
+                    # Phase 4: Compile research record
+                    status_text.text("📝 Compiling research record...")
+                    progress_bar.progress(85)
                     
-                    # Display results
-                    if output_path and os.path.exists(output_path):
-                        col1, col2 = st.columns([2, 1])
-                        
-                        with col1:
-                            st.markdown("#### 🎯 Detection Results")
+                    # Create comprehensive research entry
+                    research_entry = {
+                        'timestamp': datetime.now(),
+                        'observation_id': f"OBS_{len(st.session_state.research_data) + 1:04d}",
+                        'file_name': media_file.name,
+                        'file_size_kb': len(media_file.getvalue()) / 1024,
+                        'media_type': media_file.type.split('/')[0],
+                        'observer': observer_name,
+                        'observation_date': observation_date,
+                        'observation_time': observation_time,
+                        'observation_type': observation_type,
+                        'location_lat': float(lat) if lat else None,
+                        'location_lon': float(lon) if lon else None,
+                        'location_name': selected_city if location_mode == "🏙️ Select City" else "Custom",
+                        'sqm_value': sqm,
+                        'humidity_manual': humidity,
+                        'wind_speed_manual': wind_speed,
+                        'weather_condition_visual': weather_condition,
+                        'moon_visibility_visual': moon_visibility,
+                        'seeing_conditions': seeing_conditions,
+                        'moon_altitude_manual': moon_altitude,
+                        'sun_altitude_manual': sun_altitude,
+                        'equipment_used': equipment_used,
+                        'confidence_threshold': confidence_threshold,
+                        **detection_results,
+                        **environmental_data,
+                        'research_notes': research_notes
+                    }
+                    
+                    # Store in research database
+                    st.session_state.research_data.append(research_entry)
+                    
+                    # Create observation log entry
+                    log_entry = {
+                        'timestamp': datetime.now(),
+                        'observation_id': research_entry['observation_id'],
+                        'file': media_file.name,
+                        'location': selected_city if location_mode == "🏙️ Select City" else f"{lat}, {lon}",
+                        'sqm': sqm,
+                        'visibility': moon_visibility,
+                        'weather': weather_condition,
+                        'detections': detection_results.get('detection_count', 0),
+                        'success': detection_results.get('detection_count', 0) > 0
+                    }
+                    st.session_state.observation_log.append(log_entry)
+                    
+                    # Complete processing
+                    status_text.text("✅ Research processing complete!")
+                    progress_bar.progress(100)
+                    
+                    # Display research results
+                    st.success("🎉 **Research Data Collected Successfully!**")
+                    
+                    # Results display
+                    result_col1, result_col2 = st.columns([2, 1])
+                    
+                    with result_col1:
+                        st.markdown("#### 🎯 Detection Results")
+                        if output_path and os.path.exists(output_path):
                             if media_file.type.startswith("image"):
-                                st.image(output_path, caption="Hilal Detection Results", use_column_width=True)
+                                st.image(output_path, caption="Detection Analysis Results", use_column_width=True)
                             else:
                                 st.video(output_path)
+                    
+                    with result_col2:
+                        st.markdown("#### 📊 Research Summary")
                         
-                        with col2:
-                            st.markdown("#### 📊 Analysis Summary")
-                            st.metric("Detections Found", detection_count)
-                            if detection_count > 0:
-                                st.metric("Average Confidence", f"{avg_confidence*100:.1f}%")
-                                st.metric("Best Confidence", f"{max_confidence*100:.1f}%")
-                            
-                            # Weather summary
-                            st.markdown("**Weather Conditions:**")
-                            st.write(f"🌡️ Temperature: {weather_data.get('suhu', 'N/A')}°C")
-                            st.write(f"💧 Humidity: {weather_data.get('kelembapan', 'N/A')}%")
-                            st.write(f"☁️ Condition: {weather_data.get('cuaca', 'N/A')}")
+                        st.metric("🆔 Observation ID", research_entry['observation_id'])
+                        st.metric("🎯 Detections Found", detection_results.get('detection_count', 0))
+                        
+                        if detection_results.get('avg_confidence', 0) > 0:
+                            st.metric("📈 Avg Confidence", f"{detection_results['avg_confidence']*100:.1f}%")
+                        
+                        st.metric("🌌 SQM Reading", f"{sqm}")
+                        
+                        # Research quality indicators
+                        quality_score = calculate_research_quality(research_entry)
+                        st.metric("🏆 Data Quality", f"{quality_score:.1f}/10")
+                        
+                        # Auto-save research data
+                        if auto_save:
+                            save_research_data()
+                            st.success("💾 Research data saved")
                 
                 except Exception as e:
-                    st.error(f"❌ Processing error: {e}")
+                    st.error(f"❌ Research processing failed: {str(e)}")
+                finally:
+                    progress_bar.empty()
+                    status_text.empty()
 
-elif research_mode == "📊 Historical Data":
-    st.markdown("""
-    <div class="analysis-header">
-        <h2>📊 Historical Data Analysis</h2>
-        <p>Analisis data pengamatan hilal historis untuk penelitian</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Load historical data
+# Research data management functions
+def save_research_data():
+    """Save research data to files"""
     try:
-        conn = sqlite3.connect('hilal_database.db')
-        df_observations = pd.read_sql_query("""
-            SELECT o.*, d.detection_count, d.avg_confidence, d.max_confidence
-            FROM hilal_observations o
-            LEFT JOIN detection_results d ON o.id = d.observation_id
-            ORDER BY o.observation_date DESC
-        """, conn)
-        conn.close()
+        # Save research data
+        if st.session_state.research_data:
+            df_research = pd.DataFrame(st.session_state.research_data)
+            df_research.to_csv("data/research_database.csv", index=False)
         
-        if len(df_observations) > 0:
-            # Summary statistics
-            col1, col2, col3, col4 = st.columns(4)
+        # Save observation log
+        if st.session_state.observation_log:
+            df_log = pd.DataFrame(st.session_state.observation_log)
+            df_log.to_csv("data/observation_log.csv", index=False)
             
-            with col1:
-                total_obs = len(df_observations)
-                st.metric("Total Observations", total_obs)
-            
-            with col2:
-                successful_detections = len(df_observations[df_observations['hilal_detected'] == 1])
-                success_rate = (successful_detections / total_obs * 100) if total_obs > 0 else 0
-                st.metric("Success Rate", f"{success_rate:.1f}%")
-            
-            with col3:
-                avg_sqm = df_observations['sqm_value'].mean()
-                st.metric("Average SQM", f"{avg_sqm:.1f}" if not pd.isna(avg_sqm) else "N/A")
-            
-            with col4:
-                unique_locations = df_observations['city'].nunique()
-                st.metric("Locations Observed", unique_locations)
-            
-            # Data visualization
-            st.markdown("### 📈 Research Visualizations")
-            
-            viz_col1, viz_col2 = st.columns(2)
-            
-            with viz_col1:
-                # Detection success by SQM
-                if 'sqm_value' in df_observations.columns:
-                    fig_sqm = px.scatter(
-                        df_observations,
-                        x='sqm_value',
-                        y='hilal_detected',
-                        color='detection_confidence',
-                        title="Detection Success vs Sky Quality (SQM)",
-                        labels={'sqm_value': 'SQM Value', 'hilal_detected': 'Detection Success'},
-                        template="plotly_dark"
-                    )
-                    st.plotly_chart(fig_sqm, use_container_width=True)
-            
-            with viz_col2:
-                # Detection by location
-                location_success = df_observations.groupby('city').agg({
-                    'hilal_detected': 'mean',
-                    'sqm_value': 'mean'
-                }).reset_index()
-                
-                fig_location = px.bar(
-                    location_success,
-                    x='city',
-                    y='hilal_detected',
-                    title="Detection Success Rate by Location",
-                    template="plotly_dark"
-                )
-                fig_location.update_xaxis(tickangle=45)
-                st.plotly_chart(fig_location, use_container_width=True)
-            
-            # Historical data table
-            st.markdown("### 🗂️ Historical Observations")
-            
-            # Filter options
-            filter_col1, filter_col2, filter_col3 = st.columns(3)
-            
-            with filter_col1:
-                city_filter = st.multiselect(
-                    "Filter by City:",
-                    options=df_observations['city'].unique(),
-                    default=[]
-                )
-            
-            with filter_col2:
-                detection_filter = st.selectbox(
-                    "Detection Status:",
-                    ["All", "Successful Only", "Failed Only"]
-                )
-            
-            with filter_col3:
-                date_range = st.date_input(
-                    "Date Range:",
-                    value=[],
-                    help="Select date range for filtering"
-                )
-            
-            # Apply filters
-            filtered_df = df_observations.copy()
-            
-            if city_filter:
-                filtered_df = filtered_df[filtered_df['city'].isin(city_filter)]
-            
-            if detection_filter == "Successful Only":
-                filtered_df = filtered_df[filtered_df['hilal_detected'] == 1]
-            elif detection_filter == "Failed Only":
-                filtered_df = filtered_df[filtered_df['hilal_detected'] == 0]
-            
-            # Display filtered data
-            st.dataframe(
-                filtered_df[['observation_date', 'city', 'sqm_value', 'weather_condition', 
-                           'hilal_detected', 'detection_confidence']],
-                use_container_width=True
-            )
-            
-            # Export options
-            col1, col2 = st.columns(2)
-            with col1:
-                if st.button("📥 Export Filtered Data"):
-                    csv_export = filtered_df.to_csv(index=False)
-                    st.download_button(
-                        "Download CSV",
-                        csv_export,
-                        f"hilal_historical_data_{datetime.now().strftime('%Y%m%d')}.csv",
-                        "text/csv"
-                    )
-            
-            with col2:
-                if st.button("📊 Generate Analysis Report"):
-                    # Generate statistical analysis
-                    report = generate_statistical_report(filtered_df)
-                    st.download_button(
-                        "Download Report",
-                        report,
-                        f"hilal_analysis_report_{datetime.now().strftime('%Y%m%d')}.md",
-                        "text/markdown"
-                    )
-        
-        else:
-            st.info("📊 No historical data available. Start by making observations in Detection Analysis mode.")
-    
-    except Exception as e:
-        st.error(f"Database error: {e}")
-
-elif research_mode == "🌙 Visibility Prediction":
-    st.markdown("""
-    <div class="analysis-header">
-        <h2>🌙 Hilal Visibility Prediction</h2>
-        <p>Prediksi visibilitas hilal berdasarkan kondisi astronomis dan cuaca</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Prediction input
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown("### 🌍 Location & Time")
-        
-        # Location
-        pred_city = st.selectbox(
-            "Select City for Prediction:",
-            [""] + list(CITIES.keys())
-        )
-        
-        if pred_city:
-            city_data = CITIES[pred_city]
-            pred_lat = city_data['lat']
-            pred_lon = city_data['lon']
-            st.success(f"📍 {pred_city} selected")
-        else:
-            pred_lat = st.number_input("Latitude", value=-6.175, step=0.001, format="%.3f")
-            pred_lon = st.number_input("Longitude", value=106.827, step=0.001, format="%.3f")
-        
-        # Prediction date
-        prediction_date = st.date_input(
-            "Prediction Date:",
-            value=datetime.now().date() + timedelta(days=1)
-        )
-        
-        prediction_time = st.time_input(
-            "Observation Time:",
-            value=datetime.strptime("18:30", "%H:%M").time()
-        )
-    
-    with col2:
-        st.markdown("### 🌤️ Expected Conditions")
-        
-        expected_sqm = st.number_input("Expected SQM", value=19.5, step=0.1)
-        expected_clouds = st.slider("Expected Cloud Cover (%)", 0, 100, 30, 5)
-        expected_humidity = st.slider("Expected Humidity (%)", 30, 100, 70, 5)
-        
-        # Historical success rate for this location
-        try:
-            conn = sqlite3.connect('hilal_database.db')
-            
-            if pred_city:
-                historical_data = pd.read_sql_query("""
-                    SELECT * FROM hilal_observations 
-                    WHERE city = ? AND hilal_detected = 1
-                """, conn, params=[pred_city])
-            else:
-                # Find nearby observations (within 0.5 degrees)
-                historical_data = pd.read_sql_query("""
-                    SELECT * FROM hilal_observations 
-                    WHERE ABS(latitude - ?) < 0.5 AND ABS(longitude - ?) < 0.5
-                """, conn, params=[pred_lat, pred_lon])
-            
-            if len(historical_data) > 0:
-                historical_success_rate = len(historical_data) / len(pd.read_sql_query("""
-                    SELECT * FROM hilal_observations 
-                    WHERE city = ?
-                """, conn, params=[pred_city])) * 100 if pred_city else 0
-                
-                st.info(f"Historical Success Rate: {historical_success_rate:.1f}%")
-            else:
-                st.info("No historical data for this location")
-            
-            conn.close()
-            
-        except Exception as e:
-            st.warning(f"Could not load historical data: {e}")
-    
-    # Run prediction
-    if st.button("🔮 Generate Visibility Prediction", type="primary"):
-        with st.spinner("Calculating visibility prediction..."):
-            try:
-                # Combine datetime
-                prediction_datetime = datetime.combine(prediction_date, prediction_time)
-                
-                # Get astronomical data
-                astro_data = get_astronomical_data(pred_lat, pred_lon, prediction_datetime)
-                
-                # Calculate visibility score
-                visibility_score = calculate_visibility_score(
-                    expected_sqm, expected_clouds, expected_humidity, 
-                    astro_data.get('moon_phase', {})
-                )
-                
-                # Display prediction results
-                st.markdown("### 🎯 Prediction Results")
-                
-                result_col1, result_col2, result_col3 = st.columns(3)
-                
-                with result_col1:
-                    score_color = "green" if visibility_score > 70 else "orange" if visibility_score > 40 else "red"
-                    st.markdown(f"""
-                    <div class="metric-container" style="border-color: {score_color};">
-                        <h3 style="color: {score_color};">Visibility Score</h3>
-                        <h1 style="color: {score_color};">{visibility_score}%</h1>
-                    </div>
-                    """, unsafe_allow_html=True)
-                
-                with result_col2:
-                    moon_phase = astro_data.get('moon_phase', {})
-                    st.markdown(f"""
-                    <div class="metric-container">
-                        <h4>Moon Phase</h4>
-                        <p>{moon_phase.get('phase_name', 'Unknown')}</p>
-                        <p>Illumination: {moon_phase.get('illumination', 0)}%</p>
-                    </div>
-                    """, unsafe_allow_html=True)
-                
-                with result_col3:
-                    recommendation = get_observation_recommendation(visibility_score)
-                    st.markdown(f"""
-                    <div class="metric-container">
-                        <h4>Recommendation</h4>
-                        <p>{recommendation}</p>
-                    </div>
-                    """, unsafe_allow_html=True)
-                
-                # Detailed factors analysis
-                st.markdown("### 📋 Influencing Factors")
-                
-                factors_data = {
-                    'Factor': ['Sky Quality (SQM)', 'Cloud Cover', 'Humidity', 'Moon Phase', 'Moon Illumination'],
-                    'Value': [expected_sqm, f"{expected_clouds}%", f"{expected_humidity}%", 
-                             moon_phase.get('phase_name', 'Unknown'), f"{moon_phase.get('illumination', 0)}%"],
-                    'Impact': [
-                        get_factor_impact(expected_sqm, 'sqm'),
-                        get_factor_impact(expected_clouds, 'clouds'),
-                        get_factor_impact(expected_humidity, 'humidity'),
-                        get_factor_impact(moon_phase.get('illumination', 0), 'illumination'),
-                        get_factor_impact(moon_phase.get('phase_degrees', 0), 'phase')
-                    ],
-                    'Score': [
-                        calculate_sqm_score(expected_sqm),
-                        calculate_cloud_score(expected_clouds),
-                        calculate_humidity_score(expected_humidity),
-                        calculate_illumination_score(moon_phase.get('illumination', 0)),
-                        calculate_phase_score(moon_phase.get('phase_degrees', 0))
-                    ]
-                }
-                
-                factors_df = pd.DataFrame(factors_data)
-                st.dataframe(factors_df, use_container_width=True)
-                
-            except Exception as e:
-                st.error(f"Prediction calculation error: {e}")
-
-elif research_mode == "📈 Statistical Analysis":
-    st.markdown("""
-    <div class="analysis-header">
-        <h2>📈 Statistical Research Analysis</h2>
-        <p>Analisis korelasi dan statistik untuk publikasi penelitian</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    try:
-        conn = sqlite3.connect('hilal_database.db')
-        df_all = pd.read_sql_query("""
-            SELECT o.*, d.detection_count, d.avg_confidence, d.max_confidence
-            FROM hilal_observations o
-            LEFT JOIN detection_results d ON o.id = d.observation_id
-        """, conn)
-        conn.close()
-        
-        if len(df_all) > 10:  # Need sufficient data for statistical analysis
-            # Correlation analysis
-            st.markdown("### 🔗 Correlation Analysis")
-            
-            # Prepare numerical data for correlation
-            numerical_cols = ['sqm_value', 'temperature', 'humidity', 'hilal_detected', 'detection_confidence']
-            corr_data = df_all[numerical_cols].dropna()
-            
-            if len(corr_data) > 5:
-                correlation_matrix = corr_data.corr()
-                
-                fig_corr = px.imshow(
-                    correlation_matrix,
-                    title="Correlation Matrix: Detection Success Factors",
-                    color_continuous_scale="RdBu",
-                    aspect="auto",
-                    template="plotly_dark"
-                )
-                st.plotly_chart(fig_corr, use_container_width=True)
-                
-                # Key correlations
-                st.markdown("### 🔍 Key Research Findings")
-                
-                sqm_correlation = correlation_matrix.loc['hilal_detected', 'sqm_value']
-                temp_correlation = correlation_matrix.loc['hilal_detected', 'temperature']
-                humidity_correlation = correlation_matrix.loc['hilal_detected', 'humidity']
-                
-                findings_col1, findings_col2, findings_col3 = st.columns(3)
-                
-                with findings_col1:
-                    st.metric("SQM ↔ Detection", f"{sqm_correlation:.3f}")
-                    st.caption("Correlation between sky quality and detection success")
-                
-                with findings_col2:
-                    st.metric("Temperature ↔ Detection", f"{temp_correlation:.3f}")
-                    st.caption("Correlation between temperature and detection")
-                
-                with findings_col3:
-                    st.metric("Humidity ↔ Detection", f"{humidity_correlation:.3f}")
-                    st.caption("Correlation between humidity and detection")
-            
-            # Advanced statistical analysis
-            st.markdown("### 📊 Advanced Statistical Analysis")
-            
-            analysis_col1, analysis_col2 = st.columns(2)
-            
-            with analysis_col1:
-                # SQM distribution analysis
-                sqm_data = df_all['sqm_value'].dropna()
-                if len(sqm_data) > 0:
-                    fig_sqm_dist = px.histogram(
-                        df_all,
-                        x='sqm_value',
-                        color='hilal_detected',
-                        title="SQM Distribution by Detection Success",
-                        nbins=20,
-                        template="plotly_dark"
-                    )
-                    st.plotly_chart(fig_sqm_dist, use_container_width=True)
-            
-            with analysis_col2:
-                # Time series analysis
-                df_all['observation_date'] = pd.to_datetime(df_all['observation_date'])
-                monthly_success = df_all.groupby(df_all['observation_date'].dt.to_period('M')).agg({
-                    'hilal_detected': 'mean'
-                }).reset_index()
-                monthly_success['observation_date'] = monthly_success['observation_date'].astype(str)
-                
-                fig_time = px.line(
-                    monthly_success,
-                    x='observation_date',
-                    y='hilal_detected',
-                    title="Detection Success Rate Over Time",
-                    template="plotly_dark"
-                )
-                st.plotly_chart(fig_time, use_container_width=True)
-            
-            # Research summary statistics
-            st.markdown("### 📋 Research Summary Statistics")
-            
-            summary_stats = {
-                "Total Observations": len(df_all),
-                "Successful Detections": len(df_all[df_all['hilal_detected'] == 1]),
-                "Success Rate": f"{len(df_all[df_all['hilal_detected'] == 1]) / len(df_all) * 100:.1f}%",
-                "Average SQM": f"{df_all['sqm_value'].mean():.2f}",
-                "SQM Standard Deviation": f"{df_all['sqm_value'].std():.2f}",
-                "Average Confidence": f"{df_all['detection_confidence'].mean():.3f}",
-                "Unique Locations": df_all['city'].nunique(),
-                "Date Range": f"{df_all['observation_date'].min()} to {df_all['observation_date'].max()}"
-            }
-            
-            stats_col1, stats_col2 = st.columns(2)
-            
-            with stats_col1:
-                for key, value in list(summary_stats.items())[:4]:
-                    st.metric(key, value)
-            
-            with stats_col2:
-                for key, value in list(summary_stats.items())[4:]:
-                    st.metric(key, value)
-        
-        else:
-            st.warning("📊 Insufficient data for statistical analysis. Need at least 10 observations.")
-            st.info("Continue collecting observations to enable comprehensive statistical analysis.")
-    
-    except Exception as e:
-        st.error(f"Statistical analysis error: {e}")
-
-elif research_mode == "🗄️ Database Management":
-    st.markdown("""
-    <div class="analysis-header">
-        <h2>🗄️ Research Database Management</h2>
-        <p>Kelola dan import data historis untuk penelitian</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Database operations
-    db_col1, db_col2 = st.columns(2)
-    
-    with db_col1:
-        st.markdown("### 📥 Import Historical Data")
-        
-        # Import from CSV
-        uploaded_csv = st.file_uploader(
-            "Upload Historical Data CSV",
-            type=['csv'],
-            help="Format: date,lat,lon,city,sqm,weather,temp,humidity,detected,confidence"
-        )
-        
-        if uploaded_csv:
-            try:
-                import_df = pd.read_csv(uploaded_csv)
-                st.dataframe(import_df.head(), use_container_width=True)
-                
-                if st.button("Import to Database"):
-                    # Validate and import data
-                    imported_count = import_historical_data(import_df)
-                    st.success(f"✅ Imported {imported_count} records")
-            
-            except Exception as e:
-                st.error(f"Import error: {e}")
-        
-        # Manual data entry for single observations
-        st.markdown("### ✏️ Manual Data Entry")
-        
-        with st.form("manual_entry"):
-            entry_date = st.date_input("Observation Date")
-            entry_city = st.selectbox("City", [""] + list(CITIES.keys()))
-            entry_sqm = st.number_input("SQM Value", value=19.0, step=0.1)
-            entry_detected = st.checkbox("Hilal Detected")
-            entry_confidence = st.slider("Detection Confidence", 0.0, 1.0, 0.5, 0.01)
-            entry_notes = st.text_area("Notes")
-            
-            submitted = st.form_submit_button("Add to Database")
-            
-            if submitted and entry_city:
-                try:
-                    city_data = CITIES[entry_city]
-                    add_manual_observation(
-                        entry_date, city_data['lat'], city_data['lon'], entry_city,
-                        entry_sqm, entry_detected, entry_confidence, entry_notes
-                    )
-                    st.success("✅ Manual entry added to database")
-                except Exception as e:
-                    st.error(f"Error adding manual entry: {e}")
-    
-    with db_col2:
-        st.markdown("### 🗃️ Database Operations")
-        
-        # Database statistics
-        try:
-            conn = sqlite3.connect('hilal_database.db')
-            
-            # Get table sizes
-            obs_count = pd.read_sql_query("SELECT COUNT(*) as count FROM hilal_observations", conn).iloc[0]['count']
-            det_count = pd.read_sql_query("SELECT COUNT(*) as count FROM detection_results", conn).iloc[0]['count']
-            
-            st.metric("Observations", obs_count)
-            st.metric("Detection Results", det_count)
-            
-            # Recent entries
-            recent_obs = pd.read_sql_query("""
-                SELECT observation_date, city, sqm_value, hilal_detected 
-                FROM hilal_observations 
-                ORDER BY created_at DESC 
-                LIMIT 5
-            """, conn)
-            
-            st.markdown("**Recent Observations:**")
-            st.dataframe(recent_obs, use_container_width=True)
-            
-            conn.close()
-            
-        except Exception as e:
-            st.error(f"Database query error: {e}")
-        
-        # Database maintenance
-        st.markdown("### ⚙️ Database Maintenance")
-        
-        if st.button("🧹 Clean Duplicate Entries"):
-            cleaned = clean_duplicate_observations()
-            st.info(f"Cleaned {cleaned} duplicate entries")
-        
-        if st.button("📤 Export Full Database"):
-            export_data = export_full_database()
-            if export_data:
-                st.download_button(
-                    "Download Database Export",
-                    export_data,
-                    f"hilal_database_export_{datetime.now().strftime('%Y%m%d')}.json",
-                    "application/json"
-                )
-        
-        if st.button("⚠️ Reset Database", type="secondary"):
-            if st.checkbox("Confirm database reset"):
-                reset_database()
-                st.warning("Database has been reset")
-
-elif research_mode == "📋 Research Reports":
-    st.markdown("""
-    <div class="analysis-header">
-        <h2>📋 Research Reports Generator</h2>
-        <p>Generate comprehensive reports for academic publication</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Report generation options
-    report_col1, report_col2 = st.columns(2)
-    
-    with report_col1:
-        st.markdown("### 📊 Report Configuration")
-        
-        report_type = st.selectbox(
-            "Report Type:",
-            [
-                "Complete Research Analysis",
-                "Detection Performance Summary", 
-                "Sky Quality Correlation Study",
-                "Location-based Analysis",
-                "Temporal Analysis"
-            ]
-        )
-        
-        date_range_start = st.date_input("Analysis Start Date", datetime.now() - timedelta(days=365))
-        date_range_end = st.date_input("Analysis End Date", datetime.now())
-        
-        include_visualizations = st.checkbox("Include Visualizations", True)
-        include_raw_data = st.checkbox("Include Raw Data Appendix", False)
-        
-    with report_col2:
-        st.markdown("### 📝 Report Metadata")
-        
-        author_name = st.text_input("Author Name", "Research Team")
-        institution = st.text_input("Institution", "University")
-        research_purpose = st.text_area("Research Purpose", 
-                                      "Academic research on hilal detection accuracy and visibility factors")
-    
-    # Generate report
-    if st.button("📄 Generate Research Report", type="primary"):
-        with st.spinner("Generating comprehensive research report..."):
-            try:
-                # Load data for analysis
-                conn = sqlite3.connect('hilal_database.db')
-                analysis_df = pd.read_sql_query(f"""
-                    SELECT o.*, d.detection_count, d.avg_confidence, d.max_confidence
-                    FROM hilal_observations o
-                    LEFT JOIN detection_results d ON o.id = d.observation_id
-                    WHERE DATE(o.observation_date) BETWEEN '{date_range_start}' AND '{date_range_end}'
-                """, conn)
-                conn.close()
-                
-                if len(analysis_df) > 0:
-                    # Generate report content
-                    report_content = generate_research_report(
-                        analysis_df, report_type, author_name, institution, 
-                        research_purpose, include_visualizations, include_raw_data
-                    )
-                    
-                    # Display preview
-                    st.markdown("### 👀 Report Preview")
-                    st.markdown(report_content[:1000] + "..." if len(report_content) > 1000 else report_content)
-                    
-                    # Download options
-                    col1, col2 = st.columns(2)
-                    
-                    with col1:
-                        st.download_button(
-                            "📄 Download Markdown Report",
-                            report_content,
-                            f"hilal_research_report_{datetime.now().strftime('%Y%m%d')}.md",
-                            "text/markdown"
-                        )
-                    
-                    with col2:
-                        # Convert to JSON for further processing
-                        report_data = {
-                            "metadata": {
-                                "title": report_type,
-                                "author": author_name,
-                                "institution": institution,
-                                "generated_date": datetime.now().isoformat(),
-                                "data_range": f"{date_range_start} to {date_range_end}"
-                            },
-                            "content": report_content,
-                            "raw_data": analysis_df.to_dict('records') if include_raw_data else []
-                        }
-                        
-                        st.download_button(
-                            "📊 Download JSON Data",
-                            json.dumps(report_data, indent=2),
-                            f"hilal_research_data_{datetime.now().strftime('%Y%m%d')}.json",
-                            "application/json"
-                        )
-                
-                else:
-                    st.warning("No data available for the selected date range")
-                    
-            except Exception as e:
-                st.error(f"Report generation error: {e}")
-
-# Additional utility functions
-def calculate_visibility_score(sqm, clouds, humidity, moon_phase):
-    """Calculate overall visibility score based on multiple factors"""
-    try:
-        # SQM contribution (40% weight)
-        sqm_score = min(100, max(0, (sqm - 15) / 10 * 100)) * 0.4
-        
-        # Cloud cover contribution (30% weight) - inverted
-        cloud_score = (100 - clouds) * 0.3
-        
-        # Humidity contribution (20% weight) - inverted
-        humidity_score = (100 - humidity) * 0.2
-        
-        # Moon phase contribution (10% weight)
-        illumination = moon_phase.get('illumination', 50)
-        moon_score = (100 - illumination) * 0.1  # Less illumination is better
-        
-        total_score = sqm_score + cloud_score + humidity_score + moon_score
-        return round(min(100, max(0, total_score)), 1)
-        
-    except:
-        return 50.0  # Default moderate score
-
-def get_observation_recommendation(score):
-    """Get observation recommendation based on visibility score"""
-    if score > 80:
-        return "Excellent - Highly recommended"
-    elif score > 60:
-        return "Good - Recommended"
-    elif score > 40:
-        return "Fair - Possible but challenging"
-    else:
-        return "Poor - Not recommended"
-
-def get_factor_impact(value, factor_type):
-    """Determine impact level of each factor"""
-    if factor_type == 'sqm':
-        if value > 21: return "Very Positive"
-        elif value > 19: return "Positive"
-        elif value > 17: return "Neutral"
-        else: return "Negative"
-    elif factor_type == 'clouds':
-        if value < 20: return "Very Positive"
-        elif value < 50: return "Positive"
-        elif value < 80: return "Negative"
-        else: return "Very Negative"
-    elif factor_type == 'humidity':
-        if value < 60: return "Positive"
-        elif value < 80: return "Neutral"
-        else: return "Negative"
-    else:
-        return "Unknown"
-
-def calculate_sqm_score(sqm):
-    """Calculate SQM contribution score"""
-    return min(100, max(0, (sqm - 15) / 10 * 100))
-
-def calculate_cloud_score(clouds):
-    """Calculate cloud cover contribution score"""
-    return 100 - clouds
-
-def calculate_humidity_score(humidity):
-    """Calculate humidity contribution score"""
-    return max(0, 100 - humidity)
-
-def calculate_illumination_score(illumination):
-    """Calculate moon illumination contribution score"""
-    return max(0, 100 - illumination)
-
-def calculate_phase_score(phase_degrees):
-    """Calculate moon phase contribution score"""
-    # Best visibility is around new moon (0 degrees)
-    distance_from_new = min(phase_degrees, 360 - phase_degrees)
-    return max(0, 100 - (distance_from_new / 180 * 100))
-
-def import_historical_data(df):
-    """Import historical data from CSV"""
-    try:
-        conn = sqlite3.connect('hilal_database.db')
-        
-        imported_count = 0
-        for _, row in df.iterrows():
-            try:
-                # Insert observation
-                cursor = conn.cursor()
-                cursor.execute('''
-                    INSERT INTO hilal_observations 
-                    (observation_date, latitude, longitude, city, sqm_value, 
-                     weather_condition, temperature, humidity, hilal_detected, 
-                     detection_confidence, notes)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ''', (
-                    row.get('date', datetime.now().isoformat()),
-                    row.get('lat', 0),
-                    row.get('lon', 0),
-                    row.get('city', 'Unknown'),
-                    row.get('sqm', 19.0),
-                    row.get('weather', 'Unknown'),
-                    row.get('temp', 25),
-                    row.get('humidity', 70),
-                    row.get('detected', 0),
-                    row.get('confidence', 0.5),
-                    row.get('notes', '')
-                ))
-                imported_count += 1
-            except Exception as e:
-                st.warning(f"Error importing row: {e}")
-        
-        conn.commit()
-        conn.close()
-        return imported_count
-        
-    except Exception as e:
-        st.error(f"Import error: {e}")
-        return 0
-
-def add_manual_observation(date, lat, lon, city, sqm, detected, confidence, notes):
-    """Add manual observation to database"""
-    try:
-        conn = sqlite3.connect('hilal_database.db')
-        cursor = conn.cursor()
-        
-        cursor.execute('''
-            INSERT INTO hilal_observations 
-            (observation_date, latitude, longitude, city, sqm_value, 
-             hilal_detected, detection_confidence, notes)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (
-            date.isoformat(),
-            lat, lon, city, sqm,
-            1 if detected else 0,
-            confidence,
-            notes
-        ))
-        
-        conn.commit()
-        conn.close()
-        return True
-        
-    except Exception as e:
-        st.error(f"Error adding manual observation: {e}")
-        return False
-
-def clean_duplicate_observations():
-    """Remove duplicate observations from database"""
-    try:
-        conn = sqlite3.connect('hilal_database.db')
-        cursor = conn.cursor()
-        
-        # Find and remove duplicates based on date, location, and SQM
-        cursor.execute('''
-            DELETE FROM hilal_observations 
-            WHERE id NOT IN (
-                SELECT MIN(id) 
-                FROM hilal_observations 
-                GROUP BY observation_date, latitude, longitude, sqm_value
-            )
-        ''')
-        
-        cleaned_count = cursor.rowcount
-        conn.commit()
-        conn.close()
-        
-        return cleaned_count
-        
-    except Exception as e:
-        st.error(f"Error cleaning duplicates: {e}")
-        return 0
-
-def export_full_database():
-    """Export complete database as JSON"""
-    try:
-        conn = sqlite3.connect('hilal_database.db')
-        
-        # Export all tables
-        observations = pd.read_sql_query("SELECT * FROM hilal_observations", conn)
-        detections = pd.read_sql_query("SELECT * FROM detection_results", conn)
-        analysis = pd.read_sql_query("SELECT * FROM research_analysis", conn)
-        
-        conn.close()
-        
-        export_data = {
-            "export_date": datetime.now().isoformat(),
-            "hilal_observations": observations.to_dict('records'),
-            "detection_results": detections.to_dict('records'),
-            "research_analysis": analysis.to_dict('records')
-        }
-        
-        return json.dumps(export_data, indent=2)
-        
-    except Exception as e:
-        st.error(f"Export error: {e}")
-        return None
-
-def reset_database():
-    """Reset database (for development/testing)"""
-    try:
-        if os.path.exists('hilal_database.db'):
-            os.remove('hilal_database.db')
-        init_database()
         return True
     except Exception as e:
-        st.error(f"Reset error: {e}")
+        st.error(f"Error saving data: {e}")
         return False
 
-def generate_research_report(df, report_type, author, institution, purpose, include_viz, include_raw):
+def calculate_research_quality(entry):
+    """Calculate data quality score for research purposes"""
+    score = 0
+    max_score = 10
+    
+    # Detection quality (3 points)
+    if entry.get('detection_count', 0) > 0:
+        score += 2
+        if entry.get('avg_confidence', 0) > 0.5:
+            score += 1
+    
+    # Environmental data completeness (3 points)
+    if entry.get('sqm_value', 0) > 0:
+        score += 1
+    if entry.get('weather_temp') not in [None, 'N/A']:
+        score += 1
+    if entry.get('moon_phase'):
+        score += 1
+    
+    # Metadata completeness (2 points)
+    if entry.get('observer'):
+        score += 1
+    if entry.get('equipment_used'):
+        score += 1
+    
+    # Location accuracy (2 points)
+    if entry.get('location_lat') and entry.get('location_lon'):
+        score += 2
+    
+    return score
+
+def generate_research_report(research_data, observation_log, title, author, institution, include_methodology):
     """Generate comprehensive research report"""
     
-    report = f"""# {report_type}
-## Hilal Detection Research Analysis
+    df_research = pd.DataFrame(research_data)
+    df_log = pd.DataFrame(observation_log)
+    
+    report = f"""# {title}
 
 **Author:** {author}  
 **Institution:** {institution}  
-**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}  
-**Data Range:** {df['observation_date'].min()} to {df['observation_date'].max()}
-
-## Research Purpose
-{purpose}
+**Report Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}  
+**Total Observations:** {len(research_data)}
 
 ## Executive Summary
 
-This analysis examines {len(df)} hilal observations collected across {df['city'].nunique()} locations. 
-The overall detection success rate was {len(df[df['hilal_detected'] == 1]) / len(df) * 100:.1f}%, 
-with an average sky quality (SQM) of {df['sqm_value'].mean():.2f}.
+This research analyzes hilal (crescent moon) detection using computer vision techniques combined with astronomical and environmental data. The study collected {len(research_data)} observations across various conditions to evaluate detection accuracy and environmental factors affecting visibility.
 
-## Methodology
+### Key Findings
 
-The research employed YOLOv5-based computer vision for automatic hilal detection, 
-integrated with comprehensive sky quality measurements and meteorological data.
+- **Total Observations:** {len(research_data)}
+- **Successful Detections:** {(df_research['detection_count'] > 0).sum() if 'detection_count' in df_research.columns else 0}
+- **Average SQM:** {df_research['sqm_value'].mean():.2f}
+- **Detection Success Rate:** {(df_research['detection_count'] > 0).mean() * 100 if 'detection_count' in df_research.columns else 0:.1f}%
 
-### Key Metrics:
-- **Total Observations:** {len(df)}
-- **Successful Detections:** {len(df[df['hilal_detected'] == 1])}
-- **Success Rate:** {len(df[df['hilal_detected'] == 1]) / len(df) * 100:.1f}%
-- **Average Detection Confidence:** {df['detection_confidence'].mean():.3f}
-- **Sky Quality Range:** {df['sqm_value'].min():.1f} - {df['sqm_value'].max():.1f} SQM
+## Research Methodology
+"""
+    
+    if include_methodology:
+        report += """
+### 1. Data Collection Protocol
 
+The research employed a systematic approach to hilal detection combining:
+
+- **Computer Vision Analysis:** YOLOv5/v8 deep learning models for object detection
+- **Environmental Monitoring:** Sky Quality Meter (SQM) readings and weather data
+- **Astronomical Integration:** Moon phase calculations and positional astronomy
+- **Standardized Documentation:** Consistent metadata collection for each observation
+
+### 2. Detection System
+
+- **Model Architecture:** YOLO (You Only Look Once) neural network
+- **Confidence Threshold:** 25% minimum for valid detections
+- **Image Processing:** OpenCV for preprocessing and annotation
+- **Output Format:** Annotated images with bounding boxes and CSV data export
+
+### 3. Environmental Parameters
+
+- **Sky Quality:** Measured using SQM scale (0-30, higher = darker sky)
+- **Weather Integration:** Real-time meteorological data via API
+- **Location Services:** GPS coordinates with timezone and elevation data
+- **Visibility Assessment:** Multi-factor analysis including atmospheric conditions
+
+"""
+    
+    # Statistical analysis
+    if 'detection_count' in df_research.columns:
+        successful_obs = df_research[df_research['detection_count'] > 0]
+        report += f"""
 ## Statistical Analysis
 
-### Correlation Analysis
-- **SQM vs Detection Success:** {df[['sqm_value', 'hilal_detected']].corr().iloc[0,1]:.3f}
-- **Temperature vs Detection:** {df[['temperature', 'hilal_detected']].corr().iloc[0,1]:.3f}
-- **Humidity vs Detection:** {df[['humidity', 'hilal_detected']].corr().iloc[0,1]:.3f}
+### Detection Performance
 
-### Optimal Conditions
-Based on successful observations:
-- **Optimal SQM Range:** {df[df['hilal_detected'] == 1]['sqm_value'].min():.1f} - {df[df['hilal_detected'] == 1]['sqm_value'].max():.1f}
-- **Average Temperature:** {df[df['hilal_detected'] == 1]['temperature'].mean():.1f}°C
-- **Average Humidity:** {df[df['hilal_detected'] == 1]['humidity'].mean():.1f}%
+- **Total Samples Processed:** {len(df_research)}
+- **Successful Detections:** {len(successful_obs)}
+- **Detection Rate:** {len(successful_obs)/len(df_research)*100:.1f}%
+- **Average Confidence:** {df_research['avg_confidence'].mean()*100:.1f}% (successful detections)
+- **Confidence Range:** {df_research['avg_confidence'].min()*100:.1f}% - {df_research['avg_confidence'].max()*100:.1f}%
+
+### Environmental Correlation
+
+**SQM Analysis:**
+- **Average SQM (All):** {df_research['sqm_value'].mean():.2f}
+- **Average SQM (Successful):** {successful_obs['sqm_value'].mean():.2f if len(successful_obs) > 0 else 'N/A'}
+- **SQM Range:** {df_research['sqm_value'].min():.1f} - {df_research['sqm_value'].max():.1f}
+
+**Weather Conditions:**
+- **Most Common Condition:** {df_research['weather_condition_visual'].mode().iloc[0] if len(df_research) > 0 else 'N/A'}
+- **Visibility Assessment:** {df_research['moon_visibility_visual'].mode().iloc[0] if len(df_research) > 0 else 'N/A'}
+
+"""
+    
+    # Data summary table
+    report += f"""
+## Data Summary
+
+### Observation Distribution
+
+| Parameter | Count | Percentage |
+|-----------|-------|------------|
+"""
+    
+    if len(df_research) > 0:
+        # Weather distribution
+        weather_dist = df_research['weather_condition_visual'].value_counts()
+        for condition, count in weather_dist.items():
+            percentage = (count / len(df_research)) * 100
+            report += f"| {condition} Weather | {count} | {percentage:.1f}% |\n"
+        
+        report += "\n"
+        
+        # Visibility distribution
+        visibility_dist = df_research['moon_visibility_visual'].value_counts()
+        for visibility, count in visibility_dist.items():
+            percentage = (count / len(df_research)) * 100
+            report += f"| {visibility} | {count} | {percentage:.1f}% |\n"
+    
+    # Conclusions and recommendations
+    report += """
 
 ## Research Conclusions
 
-1. **Sky Quality Impact:** Higher SQM values correlate with improved detection success
-2. **Weather Factors:** Clear skies and moderate humidity favor hilal visibility
-3. **Location Influence:** Rural/suburban locations show better detection rates
-4. **Technical Performance:** YOLOv5 model achieves reliable detection under optimal conditions
+### Technical Performance
 
-## Recommendations for Future Research
+The computer vision system demonstrated varying performance across different environmental conditions. Key observations include:
 
-1. Expand dataset with more diverse geographical locations
-2. Investigate seasonal variations in detection success
-3. Develop predictive models for optimal observation times
-4. Integrate real-time atmospheric data for enhanced predictions
+1. **Sky Quality Impact:** Higher SQM values correlate with improved detection accuracy
+2. **Weather Sensitivity:** Clear conditions significantly improve detection rates
+3. **Model Robustness:** System maintains functionality across diverse input conditions
 
-## Data Quality Assessment
+### Recommendations for Future Research
 
-- **Data Completeness:** {(df.notna().sum().sum() / (len(df) * len(df.columns)) * 100):.1f}%
-- **Geographic Coverage:** {df['city'].nunique()} cities across Indonesia
-- **Temporal Span:** {(pd.to_datetime(df['observation_date'].max()) - pd.to_datetime(df['observation_date'].min())).days} days
+1. **Dataset Expansion:** Collect more samples under extreme weather conditions
+2. **Model Optimization:** Fine-tune detection thresholds based on environmental parameters
+3. **Validation Studies:** Compare results with expert astronomer observations
+4. **Temporal Analysis:** Investigate seasonal and lunar cycle patterns
+
+### Limitations
+
+- Model accuracy depends on training data quality and diversity
+- Weather API availability may affect real-time environmental integration
+- Manual validation required for critical astronomical determinations
+
+## Technical Specifications
+
+**System Requirements:**
+- Python 3.8+
+- YOLOv5/v8 framework
+- OpenCV for image processing
+- Streamlit for web interface
+
+**Model Details:**
+- Architecture: YOLO object detection
+- Input Resolution: 640x640 pixels
+- Confidence Threshold: 25%
+- Processing Time: ~2-5 seconds per image
+
+**Data Storage:**
+- Research database: CSV format
+- Detection results: Annotated images/videos + coordinate data
+- Environmental data: Real-time API integration
 
 ---
 
-*Report generated by Hilal Detection Research System*
-*For academic and research purposes*
+*Report generated by Hilal Detection Research System*  
+*For questions or clarifications, contact the research team*
 """
     
     return report
 
-# Footer
+# Load existing research data if available
+@st.cache_data
+def load_existing_research_data():
+    """Load previously saved research data"""
+    research_file = Path("data/research_database.csv")
+    log_file = Path("data/observation_log.csv")
+    
+    loaded_data = {}
+    
+    if research_file.exists():
+        try:
+            loaded_data['research'] = pd.read_csv(research_file)
+        except:
+            loaded_data['research'] = pd.DataFrame()
+    else:
+        loaded_data['research'] = pd.DataFrame()
+    
+    if log_file.exists():
+        try:
+            loaded_data['log'] = pd.read_csv(log_file)
+        except:
+            loaded_data['log'] = pd.DataFrame()
+    else:
+        loaded_data['log'] = pd.DataFrame()
+    
+    return loaded_data
+
+# Footer with research information
 st.markdown("---")
 st.markdown("""
-<div style="text-align: center; padding: 20px; background: rgba(255, 255, 255, 0.05); border-radius: 15px;">
-    <h3>🔬 Research System Status</h3>
-    <p><strong>System Version:</strong> Research Edition v2.0</p>
-    <p><strong>Database:</strong> SQLite with Historical Data Integration</p>
-    <p><strong>Analytics:</strong> Statistical Analysis & Correlation Studies</p>
-    <p><strong>Purpose:</strong> Academic Research & Scientific Publication</p>
+<div style="text-align: center; padding: 30px; background: rgba(255, 255, 255, 0.05); border-radius: 15px; margin-top: 50px;">
+    <h3>🎓 Research System Specifications</h3>
+    
+    <div style="display: flex; justify-content: space-around; flex-wrap: wrap; margin: 20px 0;">
+        <div class="metric-card" style="margin: 10px; min-width: 200px;">
+            <h4>🔬 Research Focus</h4>
+            <p>Computer Vision<br>Astronomical Analysis<br>Environmental Integration</p>
+        </div>
+        
+        <div class="metric-card" style="margin: 10px; min-width: 200px;">
+            <h4>📊 Data Output</h4>
+            <p>Detection Coordinates<br>Confidence Scores<br>Environmental Parameters</p>
+        </div>
+        
+        <div class="metric-card" style="margin: 10px; min-width: 200px;">
+            <h4>📈 Analysis Tools</h4>
+            <p>Statistical Analysis<br>Correlation Studies<br>Visualization Charts</p>
+        </div>
+        
+        <div class="metric-card" style="margin: 10px; min-width: 200px;">
+            <h4>📋 Export Formats</h4>
+            <p>Research Reports<br>CSV Datasets<br>Statistical Summaries</p>
+        </div>
+    </div>
+    
+    <div class="research-note">
+        <strong>🎯 Research Objectives:</strong>
+        <ol style="text-align: left; display: inline-block;">
+            <li>Develop robust hilal detection using computer vision</li>
+            <li>Integrate environmental and astronomical data for visibility analysis</li>
+            <li>Create comprehensive database for historical analysis</li>
+            <li>Validate system accuracy across diverse observation conditions</li>
+            <li>Provide tools for Islamic calendar determination support</li>
+        </ol>
+    </div>
+    
+    <p style="margin-top: 20px; color: #B8860B;">
+        <strong>🎓 Academic Purpose:</strong> This system supports undergraduate thesis research in computer vision and astronomical applications<br>
+        <strong>🔬 Methodology:</strong> Quantitative analysis with statistical validation and environmental correlation studies<br>
+        <strong>📊 Output:</strong> Comprehensive dataset for academic analysis and publication
+    </p>
 </div>
 """, unsafe_allow_html=True)
+
+# Research data persistence
+if st.sidebar.button("💾 Save Research Session"):
+    if save_research_data():
+        st.sidebar.success("✅ Session saved successfully")
+    else:
+        st.sidebar.error("❌ Failed to save session")
+
+# Load previous research data option
+if st.sidebar.button("📂 Load Previous Data"):
+    try:
+        existing_data = load_existing_research_data()
+        
+        if not existing_data['research'].empty:
+            # Convert back to list of dicts for session state
+            st.session_state.research_data = existing_data['research'].to_dict('records')
+            st.sidebar.success(f"📊 Loaded {len(existing_data['research'])} research entries")
+        
+        if not existing_data['log'].empty:
+            st.session_state.observation_log = existing_data['log'].to_dict('records')
+            st.sidebar.success(f"📋 Loaded {len(existing_data['log'])} log entries")
+            
+    except Exception as e:
+        st.sidebar.error(f"Error loading data: {e}")
+
+# Debug panel for research
+if st.sidebar.checkbox("🔧 Research Debug"):
+    with st.expander("System Diagnostics"):
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.write("**📊 Research Data Status:**")
+            st.write(f"- Research Entries: {len(st.session_state.research_data)}")
+            st.write(f"- Observation Log: {len(st.session_state.observation_log)}")
+            st.write(f"- Detection System: {'✅ Available' if DETECTION_AVAILABLE else '❌ Unavailable'}")
+            st.write(f"- Data Auto-save: {'✅ Enabled' if auto_save else '❌ Disabled'}")
+            
+        with col2:
+            st.write("**🗂️ File System:**")
+            for dir_name in ["assets", "data", "reports", "models"]:
+                dir_path = Path(dir_name)
+                if dir_path.exists():
+                    file_count = len(list(dir_path.glob("*")))
+                    st.write(f"- {dir_name}/: {file_count} files")
+                else:
+                    st.write(f"- {dir_name}/: Not found")
+        
+        # Session state preview
+        if st.button("👀 Preview Session Data"):
+            if st.session_state.research_data:
+                st.write("**Last Research Entry:**")
+                st.json(st.session_state.research_data[-1])
+            else:
+                st.info("No research data in current session")
+
+# Performance monitoring for research
+st.sidebar.markdown("---")
+st.sidebar.markdown("### 📊 Performance Metrics")
+
+if len(st.session_state.research_data) > 0:
+    df_temp = pd.DataFrame(st.session_state.research_data)
+    
+    # Calculate session statistics
+    total_detections = df_temp['detection_count'].sum() if 'detection_count' in df_temp.columns else 0
+    avg_quality = df_temp.apply(calculate_research_quality, axis=1).mean()
+    
+    st.sidebar.metric("🎯 Total Detections", total_detections)
+    st.sidebar.metric("🏆 Avg Data Quality", f"{avg_quality:.1f}/10")
+    
+    # Session duration
+    if len(df_temp) > 1:
+        start_time = pd.to_datetime(df_temp['timestamp'].iloc[0])
+        end_time = pd.to_datetime(df_temp['timestamp'].iloc[-1])
+        duration = end_time - start_time
+        st.sidebar.metric("⏱️ Session Duration", f"{duration.total_seconds()/3600:.1f}h")
+
+else:
+    st.sidebar.info("Start collecting data to see metrics")
+
+# Research tips
+st.sidebar.markdown("---")
+st.sidebar.markdown("### 💡 Research Tips")
+st.sidebar.markdown("""
+**For Best Results:**
+- Use high-resolution images (>640px)
+- Record accurate SQM readings
+- Document weather conditions
+- Include observation metadata
+- Process multiple samples per condition
+
+**Data Quality Checklist:**
+- ✅ Clear location coordinates
+- ✅ Accurate timing information  
+- ✅ Environmental measurements
+- ✅ Equipment specifications
+- ✅ Observer identification
+""")
+
+# Emergency data export
+if st.sidebar.button("🚨 Emergency Export"):
+    if st.session_state.research_data:
+        emergency_export = {
+            'export_timestamp': datetime.now().isoformat(),
+            'research_data': st.session_state.research_data,
+            'observation_log': st.session_state.observation_log,
+            'session_notes': research_notes
+        }
+        
+        st.sidebar.download_button(
+            "📦 Download Emergency Backup",
+            str(emergency_export),
+            file_name=f"emergency_backup_{datetime.now().strftime('%Y%m%d_%H%M')}.json",
+            mime="application/json"
+        )
+    else:
+        st.sidebar.info("No data to export")
+
+# End of main application⚠️ Please upload a media file first!")
+
+elif research_mode == "📈 Statistical Review":
+    st.markdown("## 📈 Statistical Analysis & Research Insights")
+    
+    if len(st.session_state.research_data) == 0:
+        st.info("📊 No research data available yet. Please collect some data first!")
+    else:
+        # Convert session data to DataFrame
+        df_research = pd.DataFrame(st.session_state.research_data)
+        
+        # Research statistics overview
+        st.markdown("### 🔍 Research Overview")
+        
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.markdown("""
+            <div class="metric-card">
+                <h3>📊 Total Samples</h3>
+                <h2>{}</h2>
+                <p>Research observations</p>
+            </div>
+            """.format(len(df_research)), unsafe_allow_html=True)
+        
+        with col2:
+            detection_rate = df_research['detection_count'].mean() if 'detection_count' in df_research.columns else 0
+            st.markdown("""
+            <div class="metric-card">
+                <h3>🎯 Avg Detections</h3>
+                <h2>{:.1f}</h2>
+                <p>Per observation</p>
+            </div>
+            """.format(detection_rate), unsafe_allow_html=True)
+        
+        with col3:
+            avg_sqm = df_research['sqm_value'].mean()
+            st.markdown("""
+            <div class="metric-card">
+                <h3>🌌 Avg SQM</h3>
+                <h2>{:.1f}</h2>
+                <p>Sky quality</p>
+            </div>
+            """.format(avg_sqm), unsafe_allow_html=True)
+        
+        with col4:
+            success_rate = (df_research['detection_count'] > 0).mean() * 100 if 'detection_count' in df_research.columns else 0
+            st.markdown("""
+            <div class="metric-card">
+                <h3>📈 Success Rate</h3>
+                <h2>{:.1f}%</h2>
+                <p>Detection success</p>
+            </div>
+            """.format(success_rate), unsafe_allow_html=True)
+        
+        # Detailed analysis charts
+        st.markdown("### 📊 Research Data Visualization")
+        
+        chart_col1, chart_col2 = st.columns(2)
+        
+        with chart_col1:
+            # SQM vs Detection success
+            if 'detection_count' in df_research.columns:
+                fig = px.scatter(
+                    df_research, 
+                    x='sqm_value', 
+                    y='detection_count',
+                    color='weather_condition',
+                    title="🌌 SQM vs Detection Success",
+                    labels={'sqm_value': 'Sky Quality Meter', 'detection_count': 'Detections Found'}
+                )
+                fig.update_layout(
+                    paper_bgcolor='rgba(0,0,0,0)',
+                    plot_bgcolor='rgba(0,0,0,0)',
+                    font_color='white'
+                )
+                st.plotly_chart(fig, use_container_width=True)
+        
+        with chart_col2:
+            # Moon visibility distribution
+            visibility_counts = df_research['moon_visibility'].value_counts()
+            fig = px.pie(
+                values=visibility_counts.values,
+                names=visibility_counts.index,
+                title="👁️ Moon Visibility Distribution"
+            )
+            fig.update_layout(
+                paper_bgcolor='rgba(0,0,0,0)',
+                font_color='white'
+            )
+            st.plotly_chart(fig, use_container_width=True)
+        
+        # Time series analysis
+        st.markdown("### 📅 Temporal Analysis")
+        
+        # Group by date
+        df_research['date'] = pd.to_datetime(df_research['timestamp']).dt.date
+        daily_stats = df_research.groupby('date').agg({
+            'detection_count': ['count', 'sum', 'mean'],
+            'sqm_value': 'mean'
+        }).round(2)
+        
+        fig = make_subplots(
+            rows=2, cols=1,
+            subplot_titles=('Daily Observations', 'Average SQM by Date'),
+            vertical_spacing=0.1
+        )
+        
+        # Daily observation count
+        fig.add_trace(
+            go.Scatter(
+                x=daily_stats.index,
+                y=daily_stats[('detection_count', 'count')],
+                mode='lines+markers',
+                name='Observations',
+                line=dict(color='#FFD700')
+            ),
+            row=1, col=1
+        )
+        
+        # Daily average SQM
+        fig.add_trace(
+            go.Scatter(
+                x=daily_stats.index,
+                y=daily_stats[('sqm_value', 'mean')],
+                mode='lines+markers',
+                name='Avg SQM',
+                line=dict(color='#00CED1')
+            ),
+            row=2, col=1
+        )
+        
+        fig.update_layout(
+            height=500,
+            paper_bgcolor='rgba(0,0,0,0)',
+            plot_bgcolor='rgba(0,0,0,0)',
+            font_color='white'
+        )
+        
+        st.plotly_chart(fig, use_container_width=True)
+        
+        # Correlation analysis
+        st.markdown("### 🔗 Correlation Analysis")
+        
+        # Select numeric columns for correlation
+        numeric_cols = df_research.select_dtypes(include=[np.number]).columns
+        if len(numeric_cols) > 1:
+            corr_matrix = df_research[numeric_cols].corr()
+            
+            fig = px.imshow(
+                corr_matrix,
+                title="🧮 Variable Correlations",
+                color_continuous_scale='RdBu',
+                aspect='auto'
+            )
+            fig.update_layout(
+                paper_bgcolor='rgba(0,0,0,0)',
+                font_color='white'
+            )
+            st.plotly_chart(fig, use_container_width=True)
+
+elif research_mode == "📋 Export Results":
+    st.markdown("## 📋 Export & Documentation Module")
+    
+    col1, col2 = st.columns([2, 1])
+    
+    with col1:
+        st.markdown("### 📄 Research Report Generation")
+        
+        report_type = st.selectbox(
+            "Report Type:",
+            ["📊 Complete Research Report", "📈 Statistical Summary", "🔍 Detection Analysis", "📋 Observation Log"]
+        )
+        
+        include_charts = st.checkbox("Include Charts", True)
+        include_raw_data = st.checkbox("Include Raw Data", True)
+        include_methodology = st.checkbox("Include Methodology", True)
+        
+        # Report customization
+        report_title = st.text_input(
+            "Report Title:", 
+            "Hilal Detection Research Analysis"
+        )
+        
+        author_name = st.text_input("Author:", "Research Team")
+        institution = st.text_input("Institution:", "University Name")
+        
+    with col2:
+        st.markdown("### 💾 Export Options")
+        
+        # Data export buttons
+        if len(st.session_state.research_data) > 0:
+            
+            # Export research data
+            df_export = pd.DataFrame(st.session_state.research_data)
+            csv_data = df_export.to_csv(index=False)
+            
+            st.download_button(
+                "📊 Download Research Data (CSV)",
+                csv_data,
+                file_name=f"hilal_research_data_{datetime.now().strftime('%Y%m%d')}.csv",
+                mime="text/csv"
+            )
+            
+            # Export observation log
+            if len(st.session_state.observation_log) > 0:
+                df_log = pd.DataFrame(st.session_state.observation_log)
+                log_csv = df_log.to_csv(index=False)
+                
+                st.download_button(
+                    "📋 Download Observation Log (CSV)",
+                    log_csv,
+                    file_name=f"observation_log_{datetime.now().strftime('%Y%m%d')}.csv",
+                    mime="text/csv"
+                )
+        
+        # Clear data option
+        if st.button("🗑️ Clear Session Data"):
+            st.session_state.research_data = []
+            st.session_state.observation_log = []
+            st.success("✅ Session data cleared")
+    
+    # Generate comprehensive report
+    if st.button("📑 Generate Research Report", type="primary"):
+        if len(st.session_state.research_data) > 0:
+            report_content = generate_research_report(
+                st.session_state.research_data,
+                st.session_state.observation_log,
+                report_title,
+                author_name,
+                institution,
+                include_methodology
+            )
+            
+            st.download_button(
+                "📄 Download Complete Report (MD)",
+                report_content,
+                file_name=f"hilal_research_report_{datetime.now().strftime('%Y%m%d')}.md",
+                mime="text/markdown"
+            )
+            
+            # Preview report
+            with st.expander("👀 Preview Report"):
+                st.markdown(report_content)
+        else:
+            st.warning("hfksjhfiijkwd")
