@@ -8,7 +8,7 @@ plotly
 exifread
 piexif
 requests
-torch
-torchvision
+torch>=2.0.0
+torchvision>=0.15.0
 hilalpy
 skyfield
