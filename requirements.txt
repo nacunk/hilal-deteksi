@@ -10,4 +10,4 @@ pandas>=1.5.0
 matplotlib>=3.6.0
 exifread>=3.0.0
 skyfield>=1.42.0
-hilalpy>=0.6.10
+hilalpy>=0.0.4
