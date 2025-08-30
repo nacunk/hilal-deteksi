@@ -1,54 +1,31 @@
+from PIL import Image
 import exifread
-import requests
+from skyfield.api import load, wgs84
+import numpy as np
 
-# FUNGSI METADATA FOTO
-def get_gps_from_image(file):
-    try:
-        tags = exifread.process_file(file, details=False)
-        if 'GPS GPSLatitude' in tags and 'GPS GPSLongitude' in tags:
-            lat_ref = str(tags['GPS GPSLatitudeRef'])
-            lon_ref = str(tags['GPS GPSLongitudeRef'])
-            lat = tags['GPS GPSLatitude'].values
-            lon = tags['GPS GPSLongitude'].values
+# 1. Ambil metadata EXIF
+def get_exif_data(image_path):
+    with open(image_path, 'rb') as f:
+        tags = exifread.process_file(f)
+    return {
+        'camera': tags.get('Image Model'),
+        'datetime': tags.get('EXIF DateTimeOriginal'),
+        'gps_lat': tags.get('GPS GPSLatitude'),
+        'gps_lon': tags.get('GPS GPSLongitude')
+    }
 
-            lat = float(lat[0].num)/float(lat[0].den) + \
-                  float(lat[1].num)/(float(lat[1].den)*60) + \
-                  float(lat[2].num)/(float(lat[2].den)*3600)
-            lon = float(lon[0].num)/float(lon[0].den) + \
-                  float(lon[1].num)/(float(lon[1].den)*60) + \
-                  float(lon[2].num)/(float(lon[2].den)*3600)
-            
-            if lat_ref != 'N':
-                lat = -lat
-            if lon_ref != 'E':
-                lon = -lon
-            return lat, lon
-    except:
-        pass
-    return None, None
+# 2. Hitung posisi hilal
+def get_hilal_position(lat, lon, date_time):
+    eph = load('de421.bsp')
+    sun, moon, earth = eph['sun'], eph['moon'], eph['earth']
+    location = wgs84.latlon(lat, lon)
+    astrometric = location.at(date_time).observe(moon)
+    alt, az, distance = astrometric.apparent().altaz()
+    return alt.degrees, az.degrees
 
-# FUNGSI WEATHER API
-OPENWEATHER_API_KEY = "ISI_API_KEY_ANDA"
-
-def get_weather(lat, lon):
-    url = f"https://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&appid={OPENWEATHER_API_KEY}&units=metric&lang=id"
-    try:
-        response = requests.get(url).json()
-        data = {
-            "lokasi": response.get("name"),
-            "suhu": response["main"]["temp"],
-            "kelembapan": response["main"]["humidity"],
-            "kondisi": response["weather"][0]["description"].capitalize()
-        }
-        return data
-    except:
-        return None
-
-# FUNGSI GEOCODING
-def geocode_city(city_name):
-    url = f"http://api.openweathermap.org/geo/1.0/direct?q={city_name}&limit=5&appid={OPENWEATHER_API_KEY}"
-    try:
-        results = requests.get(url).json()
-        return results
-    except:
-        return []
+# 3. Analisis kecerlangan langit (brightness)
+def get_sky_brightness(image_path):
+    img = Image.open(image_path).convert('L')
+    arr = np.array(img)
+    brightness = np.mean(arr)
+    return brightness
