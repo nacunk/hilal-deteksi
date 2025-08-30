@@ -1,0 +1,15 @@
+streamlit
+opencv-python
+Pillow
+numpy
+pandas
+matplotlib
+plotly
+exifread
+piexif
+requests
+torch
+torchvision
+git+https://github.com/ultralytics/yolov5.git
+hilalpy
+skyfield
