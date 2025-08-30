@@ -10,6 +10,6 @@ piexif
 requests
 torch
 torchvision
-git+https://github.com/ultralytics/yolov5.git
+git clone +https://github.com/ultralytics/yolov5.git
 hilalpy
 skyfield
