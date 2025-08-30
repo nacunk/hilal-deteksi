@@ -1,9 +1,20 @@
 import streamlit as st
+
+# Panggil ini PALING ATAS, sebelum Streamlit lain
+st.set_page_config(
+    page_title="🌙 Deteksi Hilal - Astronomical Observatory", 
+    layout="wide",
+    initial_sidebar_state="expanded",
+    menu_items={
+        'Get Help': 'https://github.com/yourusername/hilal-deteksi',
+        'Report a bug': 'https://github.com/yourusername/hilal-deteksi/issues',
+        'About': "Aplikasi Deteksi Hilal dengan YOLOv5 dan Data Astronomis"
+    }
+)
+
 import sys
 from pathlib import Path
 from utils import extract_exif_metadata, compute_hilal_position, predict_hilal_visibility, get_weather
-
-st.set_page_config(page_title="🌙 Deteksi Hilal", layout="wide")
 
 st.title("Sistem Deteksi Hilal")
 
@@ -76,18 +87,6 @@ CITIES = {
     "Malang": {"lat": -7.9797, "lon": 112.6304, "timezone": "WIB"},
     "Padang": {"lat": -0.9471, "lon": 100.4172, "timezone": "WIB"}
 }
-
-# Page config with astronomical theme
-st.set_page_config(
-    page_title="🌙 Deteksi Hilal - Astronomical Observatory", 
-    layout="wide",
-    initial_sidebar_state="expanded",
-    menu_items={
-        'Get Help': 'https://github.com/yourusername/hilal-deteksi',
-        'Report a bug': 'https://github.com/yourusername/hilal-deteksi/issues',
-        'About': "Aplikasi Deteksi Hilal dengan YOLOv5 dan Data Astronomis"
-    }
-)
 
 # Custom CSS for astronomical theme
 st.markdown("""
