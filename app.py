@@ -64,7 +64,10 @@ if uploaded_file:
         st.write(f"Derajat Fase: {moon_phase['phase_degrees']}°")
         st.write(f"Iluminasi: {moon_phase['illumination']}%")
     else:
-        st.warning("Data waktu atau koordinat tidak lengkap. Tidak dapat menghitung posisi hilal dan data astronomis otomatis.")
+        st.warning(
+            "Metadata EXIF tidak tersedia atau tidak lengkap pada gambar yang diunggah. "
+            "Silakan masukkan data waktu, lokasi (koordinat), dan informasi lainnya secara manual pada form di bawah ini untuk melanjutkan analisis hilal."
+        )
 
     # --- Preview gambar ---
     st.image("temp.jpg", caption="Gambar Hilal yang Diupload", use_column_width=True)
