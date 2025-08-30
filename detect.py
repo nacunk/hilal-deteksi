@@ -396,4 +396,4 @@ class EnhancedHilalDetector:
             'coverage_percentage': float(total_detected_area / total_image_area * 100),
             'avg_detection_size': float(np.mean(areas)),
             'size_distribution': {
-                'large': len([d for d in detections if d['size_category'] == 'Large']),
+                'large': len([d for d in detections if d['size_category'] == 'Large']),}}
