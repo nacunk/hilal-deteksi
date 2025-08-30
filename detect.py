@@ -486,4 +486,8 @@ def create_dummy_detection(file_path, media_type):
         
     except Exception as e:
         print(f"Error creating dummy detection: {e}")
-        return None, None
+        return None, None                     
+           
+                
+                   
+                   

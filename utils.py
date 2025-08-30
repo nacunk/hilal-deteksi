@@ -2,6 +2,64 @@ import requests
 import json
 from datetime import datetime
 import math
+import exifread
+from skyfield.api import load, wgs84
+import hilalpy
+
+def parse_exif_datetime(dt_str):
+    """Parse EXIF datetime string to Python datetime object."""
+    try:
+        return datetime.strptime(str(dt_str), "%Y:%m:%d %H:%M:%S")
+    except Exception:
+        return None
+
+def parse_exif_gps(gps_tag):
+    """Parse EXIF GPS tag to decimal degrees."""
+    try:
+        if gps_tag == 'Unknown':
+            return None
+        d, m, s = [float(x.num) / float(x.den) for x in gps_tag.values]
+        return d + m/60 + s/3600
+    except Exception:
+        return None
+
+def extract_exif_metadata(image_path):
+    with open(image_path, 'rb') as f:
+        tags = exifread.process_file(f)
+        camera = tags.get('Image Model', 'Unknown')
+        dt_raw = tags.get('EXIF DateTimeOriginal', 'Unknown')
+        gps_lat = tags.get('GPS GPSLatitude', 'Unknown')
+        gps_lat_ref = tags.get('GPS GPSLatitudeRef', None)
+        gps_lon = tags.get('GPS GPSLongitude', 'Unknown')
+        gps_lon_ref = tags.get('GPS GPSLongitudeRef', None)
+
+    dt = parse_exif_datetime(dt_raw)
+    lat = parse_exif_gps(gps_lat)
+    lon = parse_exif_gps(gps_lon)
+    # Adjust for S/W
+    if lat and gps_lat_ref and str(gps_lat_ref) == 'S':
+        lat = -lat
+    if lon and gps_lon_ref and str(gps_lon_ref) == 'W':
+        lon = -lon
+
+    return camera, dt, lat, lon
+
+def compute_hilal_position(dt, latitude, longitude):
+    if not (dt and latitude is not None and longitude is not None):
+        return None, None
+    ts = load.timescale()
+    t = ts.utc(dt.year, dt.month, dt.day, dt.hour, dt.minute, dt.second)
+    eph = load('de421.bsp')
+    observer = wgs84.latlon(latitude, longitude)
+    moon = eph['moon']
+    astrometric = observer.at(t).observe(moon)
+    alt, az, _ = astrometric.apparent().altaz()
+    return alt.degrees, az.degrees
+
+def predict_hilal_visibility(dt, latitude, longitude):
+    if not (dt and latitude is not None and longitude is not None):
+        return "Data tidak lengkap untuk prediksi visibilitas."
+    return hilalpy.visibility_prediction(dt, latitude, longitude)
 
 def get_weather(lat, lon):
     """

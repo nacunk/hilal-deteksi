@@ -1,7 +1,47 @@
 import streamlit as st
-import os
 import sys
 from pathlib import Path
+from utils import extract_exif_metadata, compute_hilal_position, predict_hilal_visibility, get_weather
+
+st.set_page_config(page_title="🌙 Deteksi Hilal", layout="wide")
+
+st.title("Sistem Deteksi Hilal")
+
+uploaded_file = st.file_uploader("Upload Gambar Hilal", type=["jpg", "jpeg", "png"])
+
+if uploaded_file:
+    with open("temp.jpg", "wb") as f:
+        f.write(uploaded_file.getbuffer())
+
+    # Membaca metadata EXIF
+    camera, dt, gps_lat, gps_lon = extract_exif_metadata("temp.jpg")
+
+    st.subheader("📷 Metadata Foto")
+    st.write(f"Kamera: {camera}")
+    st.write(f"Waktu: {dt if dt else 'Tidak tersedia'}")
+    st.write(f"Latitude: {gps_lat if gps_lat is not None else 'Tidak tersedia'}")
+    st.write(f"Longitude: {gps_lon if gps_lon is not None else 'Tidak tersedia'}")
+
+    # Menghitung posisi hilal jika data lengkap
+    if dt and gps_lat is not None and gps_lon is not None:
+        alt, az = compute_hilal_position(dt, gps_lat, gps_lon)
+        st.subheader("🌙 Posisi Hilal")
+        st.write(f"Altitude: {alt:.2f}°")
+        st.write(f"Azimuth: {az:.2f}°")
+
+        visibility = predict_hilal_visibility(dt, gps_lat, gps_lon)
+        st.subheader("🔮 Prediksi Visibilitas Hilal")
+        st.write(visibility)
+    else:
+        st.warning("Data waktu atau koordinat tidak lengkap. Tidak dapat menghitung posisi hilal.")
+
+    # Tampilkan cuaca jika koordinat tersedia
+    if gps_lat is not None and gps_lon is not None:
+        weather = get_weather(gps_lat, gps_lon)
+        st.subheader("🌤️ Data Cuaca")
+        st.write(weather)
+    else:
+        st.info("Koordinat tidak tersedia, data cuaca tidak dapat diambil.")
 
 # Add current directory to path
 sys.path.append(str(Path(__file__).parent))
@@ -9,7 +49,6 @@ sys.path.append(str(Path(__file__).parent))
 # Import dengan error handling
 try:
     from detect import detect_image, detect_video
-    from utils import get_weather
     DETECTION_AVAILABLE = True
 except ImportError as e:
     st.error(f"Error importing modules: {e}")
