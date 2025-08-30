@@ -26,11 +26,11 @@ def parse_exif_gps(gps_tag):
 def extract_exif_metadata(image_path):
     with open(image_path, 'rb') as f:
         tags = exifread.process_file(f)
-        camera = tags.get('Image Model', 'Unknown')
-        dt_raw = tags.get('EXIF DateTimeOriginal', 'Unknown')
-        gps_lat = tags.get('GPS GPSLatitude', 'Unknown')
+        camera = tags.get('Image Model', None)
+        dt_raw = tags.get('EXIF DateTimeOriginal', None)
+        gps_lat = tags.get('GPS GPSLatitude', None)
         gps_lat_ref = tags.get('GPS GPSLatitudeRef', None)
-        gps_lon = tags.get('GPS GPSLongitude', 'Unknown')
+        gps_lon = tags.get('GPS GPSLongitude', None)
         gps_lon_ref = tags.get('GPS GPSLongitudeRef', None)
 
     dt = parse_exif_datetime(dt_raw)
