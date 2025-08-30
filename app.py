@@ -4,7 +4,7 @@ import os
 
 # Panggil ini PALING ATAS, sebelum Streamlit lain
 st.set_page_config(
-    page_title="🌙 Deteksi Hilal - Astronomical Observatory", 
+    page_title="🌙 Deteksi Hilal - Observatorium Astronomi", 
     layout="wide",
     initial_sidebar_state="expanded",
     menu_items={
@@ -14,13 +14,9 @@ st.set_page_config(
     }
 )
 
-import sys
-from pathlib import Path
-from utils import extract_exif_metadata, compute_hilal_position, predict_hilal_visibility, get_weather
-
 st.title("Sistem Deteksi Hilal")
 
-uploaded_file = st.file_uploader("Upload Gambar Hilal", type=["jpg", "jpeg", "png"])
+uploaded_file = st.file_uploader("Unggah Gambar Hilal", type=["jpg", "jpeg", "png"])
 
 if uploaded_file:
     with open("temp.jpg", "wb") as f:
@@ -39,8 +35,8 @@ if uploaded_file:
     if dt and gps_lat is not None and gps_lon is not None:
         alt, az = compute_hilal_position(dt, gps_lat, gps_lon)
         st.subheader("🌙 Posisi Hilal")
-        st.write(f"Altitude: {alt:.2f}°")
-        st.write(f"Azimuth: {az:.2f}°")
+        st.write(f"Altitud: {alt:.2f}°")
+        st.write(f"Azimut: {az:.2f}°")
 
         visibility = predict_hilal_visibility(dt, gps_lat, gps_lon)
         st.subheader("🔮 Prediksi Visibilitas Hilal")
@@ -274,15 +270,15 @@ col1, col2 = st.columns([2, 1])
 
 with col1:
     # --- Upload Gambar/Video ---
-    st.markdown("### 🎬 Media Upload Station")
+    st.markdown("### 🎬 Stasiun Unggah Media")
     media_file = st.file_uploader(
-        "Upload Gambar/Video Hilal untuk Analisis", 
+        "Unggah Gambar/Video Hilal untuk Analisis", 
         type=["jpg", "png", "jpeg", "mp4", "mov", "avi"],
         help="📸 Format Gambar: JPG, PNG, JPEG | 🎥 Format Video: MP4, MOV, AVI"
     )
 
     if media_file:
-        st.success(f"✅ **Media Loaded:** {media_file.name}")
+        st.success(f"✅ **Media Dimuat:** {media_file.name}")
         
         # Preview media dalam container yang lebih menarik
         with st.container():
@@ -304,17 +300,17 @@ with col2:
     """)
 
 # --- Input SQM ---
-st.markdown("### 🌌 Sky Quality Measurement")
+st.markdown("### 🌌 Pengukuran Kualitas Langit")
 col1, col2, col3 = st.columns([2, 1, 1])
 
 with col1:
     sqm = st.number_input(
-        "Sky Quality Meter Reading:", 
+        "Nilai Sky Quality Meter (SQM):", 
         min_value=0.0, 
         max_value=30.0, 
         step=0.1,
         value=20.0,
-        help="🌟 SQM measures sky darkness - higher values indicate darker, better skies for observation"
+        help="🌟 SQM mengukur kegelapan langit - nilai lebih tinggi berarti langit lebih gelap dan baik untuk observasi"
     )
 
 with col2:
@@ -362,32 +358,21 @@ with col3:
     """, unsafe_allow_html=True)
 
 # --- Input Lokasi dengan opsi Kota atau Koordinat ---
-st.markdown("### 🌍 Location & Coordinates")
+st.markdown("### 🌍 Lokasi & Koordinat")
 
 # Toggle untuk memilih mode input
 location_mode = st.radio(
-    "Choose location input method:",
-    ["🏙️ Select City", "🎯 Manual Coordinates"],
+    "Pilih metode input lokasi:",
+    ["🏙️ Pilih Kota", "🎯 Koordinat Manual"],
     horizontal=True
 )
 
-if location_mode == "🏙️ Select City":
-    col1, col2 = st.columns([2, 1])
-    
-    with col1:
-        selected_city = st.selectbox(
-            "Select City in Indonesia:",
-            [""] + list(CITIES.keys()),
-            help="🗺️ Pre-configured coordinates for major Indonesian cities"
-        )
-    
-    with col2:
-        if selected_city:
-            city_data = CITIES[selected_city]
-            st.success(f"📍 **{selected_city}**")
-            st.write(f"📐 Lat: {city_data['lat']}")
-            st.write(f"📐 Lon: {city_data['lon']}")
-            st.write(f"🕐 Zone: {city_data['timezone']}")
+if location_mode == "🏙️ Pilih Kota":
+    selected_city = st.selectbox(
+        "Pilih Kota di Indonesia:",
+        [""] + list(CITIES.keys()),
+        help="🗺️ Koordinat telah dikonfigurasi untuk kota-kota besar di Indonesia"
+    )
     
     # Set coordinates from selected city
     if selected_city:
@@ -436,12 +421,12 @@ if lat and lon:
         st.error("❌ Invalid coordinate format. Please use decimal numbers.")
 
 # --- Proses Deteksi ---
-st.markdown("### 🔍 Hilal Detection & Analysis")
+st.markdown("### 🔍 Deteksi & Analisis Hilal")
 
 detection_col1, detection_col2 = st.columns([1, 1])
 
 with detection_col1:
-    process_button = st.button("🚀 Launch Detection Analysis", type="primary")
+    process_button = st.button("🚀 Mulai Analisis Deteksi", type="primary")
 
 with detection_col2:
     if media_file:
@@ -591,7 +576,7 @@ if process_button:
             with info_col2:
                 # Weather information
                 if lat and lon:
-                    st.markdown("#### 🌤️ Weather Conditions")
+                    st.markdown("#### 🌤️ Kondisi Cuaca")
                     try:
                         status_text.text("🌡️ Retrieving weather data...")
                         weather = get_weather(lat, lon)
@@ -618,7 +603,7 @@ if process_button:
                     st.info("📍 Set coordinates to view weather data")
             
             with info_col3:
-                st.markdown("#### 📥 Download Results")
+                st.markdown("#### 📥 Unduh Hasil")
                 
                 # Enhanced download section
                 download_options = []
@@ -694,26 +679,23 @@ if process_button:
 st.markdown("---")
 st.markdown("""
 <div style="text-align: center; padding: 30px; background: rgba(255, 255, 255, 0.05); border-radius: 15px; margin-top: 50px;">
-    <h3>🌟 Hilal Detection Observatory - Technical Specifications</h3>
-    
+    <h3>🌟 Observatorium Deteksi Hilal - Spesifikasi Teknis</h3>
     <div style="display: flex; justify-content: space-around; flex-wrap: wrap; margin: 20px 0;">
         <div style="margin: 10px; padding: 15px; background: rgba(255, 215, 0, 0.1); border-radius: 10px; min-width: 200px;">
-            <h4>📊 Data Export</h4>
-            <p>CSV bounding boxes<br>Detection reports<br>Analysis summaries</p>
+            <h4>📊 Ekspor Data</h4>
+            <p>Ekspor CSV bounding box<br>Laporan deteksi<br>Ringkasan analisis</p>
         </div>
     </div>
-    
     <p style="margin-top: 30px; color: #B8860B;">
-        <strong>🔬 Research & Development:</strong> Advanced computer vision for Islamic astronomical observations<br>
-        <strong>📧 Support:</strong> Built for astronomers, researchers, and Islamic calendar authorities<br>
-        <strong>🚀 Version:</strong> Enhanced Observatory Edition with Astronomical Theme
+        <strong>🔬 Riset & Pengembangan:</strong> Computer vision untuk observasi astronomi Islam<br>
+        <strong>📧 Dukungan:</strong> Untuk astronom, peneliti, dan otoritas kalender Islam<br>
+        <strong>🚀 Versi:</strong> Edisi Observatorium dengan Tema Astronomi
     </p>
-    
     <div style="margin-top: 20px;">
         <span style="background: rgba(255, 107, 53, 0.2); color: #FF6B35; padding: 8px 16px; border-radius: 20px; margin: 5px;">🔭 Computer Vision</span>
-        <span style="background: rgba(255, 215, 0, 0.2); color: #FFD700; padding: 8px 16px; border-radius: 20px; margin: 5px;">🌙 Hilal Detection</span>
-        <span style="background: rgba(70, 183, 209, 0.2); color: #46B7D1; padding: 8px 16px; border-radius: 20px; margin: 5px;">📡 Weather API</span>
-        <span style="background: rgba(78, 205, 196, 0.2); color: #4ECDC4; padding: 8px 16px; border-radius: 20px; margin: 5px;">🌌 Sky Quality</span>
+        <span style="background: rgba(255, 215, 0, 0.2); color: #FFD700; padding: 8px 16px; border-radius: 20px; margin: 5px;">🌙 Deteksi Hilal</span>
+        <span style="background: rgba(70, 183, 209, 0.2); color: #46B7D1; padding: 8px 16px; border-radius: 20px; margin: 5px;">📡 API Cuaca</span>
+        <span style="background: rgba(78, 205, 196, 0.2); color: #4ECDC4; padding: 8px 16px; border-radius: 20px; margin: 5px;">🌌 Kualitas Langit</span>
     </div>
 </div>
 """, unsafe_allow_html=True)
