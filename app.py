@@ -2,6 +2,14 @@ import streamlit as st
 import os
 from pathlib import Path
 import sys
+from utils import (
+    extract_exif_metadata,
+    compute_hilal_position,
+    predict_hilal_visibility,
+    get_weather,
+    calculate_moon_phase,
+    get_moon_phase_name,
+)
 
 
 # Panggil ini PALING ATAS, sebelum Streamlit lain
@@ -24,35 +32,42 @@ if uploaded_file:
     with open("temp.jpg", "wb") as f:
         f.write(uploaded_file.getbuffer())
 
-    # Membaca metadata EXIF
+    # --- Ekstraksi metadata EXIF ---
     camera, dt, gps_lat, gps_lon = extract_exif_metadata("temp.jpg")
 
     st.subheader("📷 Metadata Foto")
-    st.write(f"Kamera: {camera}")
-    st.write(f"Waktu: {dt if dt else 'Tidak tersedia'}")
+    st.write(f"Perangkat/Kamera: {camera}")
+    st.write(f"Waktu Pengambilan: {dt if dt else 'Tidak tersedia'}")
     st.write(f"Latitude: {gps_lat if gps_lat is not None else 'Tidak tersedia'}")
     st.write(f"Longitude: {gps_lon if gps_lon is not None else 'Tidak tersedia'}")
 
-    # Menghitung posisi hilal jika data lengkap
+    # --- Auto-Deteksi Lokasi & Posisi Hilal ---
     if dt and gps_lat is not None and gps_lon is not None:
         alt, az = compute_hilal_position(dt, gps_lat, gps_lon)
-        st.subheader("🌙 Posisi Hilal")
+        st.subheader("🌙 Posisi Hilal (Otomatis)")
         st.write(f"Altitud: {alt:.2f}°")
         st.write(f"Azimut: {az:.2f}°")
 
         visibility = predict_hilal_visibility(dt, gps_lat, gps_lon)
         st.subheader("🔮 Prediksi Visibilitas Hilal")
         st.write(visibility)
-    else:
-        st.warning("Data waktu atau koordinat tidak lengkap. Tidak dapat menghitung posisi hilal.")
 
-    # Tampilkan cuaca jika koordinat tersedia
-    if gps_lat is not None and gps_lon is not None:
+        # --- Kecerlangan Langit (Estimasi) ---
         weather = get_weather(gps_lat, gps_lon)
-        st.subheader("🌤️ Data Cuaca")
+        st.subheader("🌤️ Data Cuaca & Kecerlangan Langit")
         st.write(weather)
+
+        # --- Fase Bulan ---
+        moon_phase = calculate_moon_phase(dt)
+        st.subheader("🌗 Fase Bulan")
+        st.write(f"Fase: {moon_phase['phase_name']}")
+        st.write(f"Derajat Fase: {moon_phase['phase_degrees']}°")
+        st.write(f"Iluminasi: {moon_phase['illumination']}%")
     else:
-        st.info("Koordinat tidak tersedia, data cuaca tidak dapat diambil.")
+        st.warning("Data waktu atau koordinat tidak lengkap. Tidak dapat menghitung posisi hilal dan data astronomis otomatis.")
+
+    # --- Preview gambar ---
+    st.image("temp.jpg", caption="Gambar Hilal yang Diupload", use_column_width=True)
 
 # Add current directory to path
 sys.path.append(str(Path(__file__).parent))
